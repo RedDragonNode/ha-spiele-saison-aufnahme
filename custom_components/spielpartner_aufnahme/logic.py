@@ -95,11 +95,11 @@ def match_filters(cam_name: str, filters: Iterable[tuple[str, str]]) -> list[str
     return [eid for eid, source in filters if key in norm(f"{source} {eid}")]
 
 
-def build_post_text(minutes: int, swing: object, lines: list[str]) -> str:
+def build_post_header(minutes: int, swing: object) -> str:
     swing_txt = f"{swing}%" if swing not in (None, "", "unknown", "unavailable") else "unbekannt"
-    ids = "\n".join(lines) if lines else "keine aktive Source-Record-Quelle gefunden"
-    return (
-        f"Aufnahme laeuft seit {minutes} Minuten.\n\n"
-        f"Schaukel Position: {swing_txt}\n\n"
-        f"Video-IDs (aktive Quellen):\n{ids}"
-    )
+    return f"Aufnahme laeuft seit {minutes} Minuten.\n\nSchaukel Position: {swing_txt}"
+
+
+def build_cam_caption(cam_name: str, video_id: str) -> str:
+    """Zeile unter dem Schnappschuss der Cam."""
+    return f"**{cam_name}**: `{video_id}`"

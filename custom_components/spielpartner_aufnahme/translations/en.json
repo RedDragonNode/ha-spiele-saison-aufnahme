@@ -12,6 +12,7 @@
           "dateiformat_endung": "File name suffix (e.g. ' (4K) %DD.%MM.%CCYY')",
           "aufnahme_entity": "Entity showing whether OBS is recording",
           "post_nach_minuten": "Status post after x minutes of recording",
+          "post_abstand_sekunden": "Gap between cam posts in seconds",
           "schaukel_entity": "Swing cover (optional, position in the post)",
           "werkzeug_basis_button": "Folder tool: 'go to base' button",
           "werkzeug_wechseln_button": "Folder tool: 'enter folder' button",
@@ -39,6 +40,7 @@
           "dateiformat_endung": "File name suffix (e.g. ' (4K) %DD.%MM.%CCYY')",
           "aufnahme_entity": "Entity showing whether OBS is recording",
           "post_nach_minuten": "Status post after x minutes of recording",
+          "post_abstand_sekunden": "Gap between cam posts in seconds",
           "schaukel_entity": "Swing cover (optional, position in the post)",
           "werkzeug_basis_button": "Folder tool: 'go to base' button",
           "werkzeug_wechseln_button": "Folder tool: 'enter folder' button",
@@ -61,13 +63,12 @@
       "step": {
         "user": {
           "title": "New player",
-          "description": "Identifier = suffix of the old helpers (e.g. frank_visselff). 'Import old helpers' reads counters, forum channel, thread and folder number from the existing helpers.",
+          "description": "Identifier = short suffix without spaces (e.g. frank_visselff). Start values set the counters the player begins with (empty = 1).",
           "data": {
             "kennung": "Identifier (a-z, 0-9, _)",
             "anzeige": "Display name (empty = from identifier)",
             "ordner_nr": "Folder number (#01)",
             "forum_id": "Discord forum channel ID",
-            "alte_helfer_uebernehmen": "Import old helpers",
             "start_saison": "Start: season",
             "start_aufnahmen_in_saison": "Start: recordings in season",
             "start_gesamt": "Start: total recordings"
@@ -102,16 +103,16 @@
           "data": {
             "name": "Name (as in OBS, e.g. Fuchsblick)",
             "kuerzel": "Abbreviation (e.g. FB)",
-            "filter_entity": "OBS filter switch (empty = auto by name)",
-            "kamera_entity": "Camera for snapshots (optional)"
+            "kamera_entity": "Camera for snapshots (optional)",
+            "discord_posten": "Post to Discord"
           }
         },
         "reconfigure": {
           "title": "Edit cam",
           "data": {
             "kuerzel": "Abbreviation",
-            "filter_entity": "OBS filter switch (empty = auto)",
-            "kamera_entity": "Camera for snapshots (optional)"
+            "kamera_entity": "Camera for snapshots (optional)",
+            "discord_posten": "Post to Discord"
           }
         }
       },

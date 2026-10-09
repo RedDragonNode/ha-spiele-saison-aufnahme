@@ -41,8 +41,10 @@ Danach: *Einstellungen → Geräte & Dienste → Integration hinzufügen → „
 2. Die **16 Standard-Cams** (Bauleitung … Wildspur) werden mit ihrem Kürzel gleich mit angelegt.
 3. **Spielpartner hinzufügen** (Drei-Punkte-Menü des Eintrags → *Spielpartner hinzufügen*):
    Kennung, Anzeigename, Ordner-Nummer (`#01`), Discord-Forum-Kanal-ID.
-   Mit **„Alte Helfer übernehmen“** werden Zähler, Forum-Kanal, Thread und Ordner-Nummer aus den
-   bisherigen Helfern gelesen (siehe [Migration](docs/migration.md)).
+   Die **Startwerte** (Saison, Aufnahmen in Saison, Aufnahmen gesamt) legen fest, mit welchen Zählern der
+   Spielpartner beginnt (leer = 1). Sie lassen sich später direkt an den Zahlenfeldern ändern.
+4. **Cams bearbeiten**: Kürzel, optional Kamera für Schnappschüsse und das Häkchen **„In Discord posten“**.
+   Nur angehakte Cams erscheinen im Discord-Beitrag.
 
 ## Ablauf einer Aufnahme
 
@@ -54,8 +56,9 @@ Danach: *Einstellungen → Geräte & Dienste → Integration hinzufügen → „
      in die zugeordneten Filter.
    - Fehlt der Discord-Thread der Saison, wird er im Forum angelegt.
    - Eine Benachrichtigung fasst alles zusammen (inkl. Hinweisen, falls etwas nicht erreichbar war).
-2. **Aufnahme läuft x Minuten**: Beitrag im Saison-Thread mit Video-IDs aller aktiven Cams,
-   Schaukel-Position und Schnappschüssen (Cams mit hinterlegter Kamera-Entity).
+2. **Aufnahme läuft x Minuten**: Beitrag im Saison-Thread. Zuerst eine Kopfzeile mit der Schaukel-Position,
+   danach **jede angehakte Cam einzeln und zeitlich versetzt** (Abstand einstellbar, Standard 20 Sekunden):
+   Schnappschuss, direkt darunter die Video-ID dieser Cam.
 3. **Aufnahme endet**: „Aufnahmen in Saison“ und „Gesamt“ steigen um 1, die Dateinamen in OBS
    werden direkt für die nächste Aufnahme aktualisiert.
 
@@ -71,9 +74,12 @@ Alle Zahlen zweistellig. Die Endung ist einstellbar. Das Sensor-Gerät jeder Cam
 ### Welche OBS-Filter gehören zu welcher Cam?
 
 Automatisch über den **Namen**: Enthält Quelle oder Entity-ID des Source-Record-Filters den Cam-Namen
-(Umlaute aufgelöst, z. B. `Hoelenblick`), gehört der Filter zur Cam. Wenn das nicht eindeutig ist,
-trägst du bei der Cam den Filter-Schalter fest ein. Filter ohne zugeordnete Cam bekommen den Pfad,
-aber keinen Dateinamen – die Benachrichtigung nennt sie.
+(Umlaute aufgelöst, z. B. `Hoelenblick`), gehört der Filter zur Cam. Filter ohne zugeordnete Cam bekommen den
+Pfad, aber keinen Dateinamen – die Benachrichtigung nennt sie.
+
+> **Wichtig:** Das alte Skript und die alten Automationen (Zähler hochzählen, 5-Minuten-Post) schreiben mit
+> ihren alten Zählern ebenfalls Dateinamen in OBS und überschreiben die der Integration. Sie müssen
+> ausgeschaltet sein, sobald die Integration übernimmt.
 
 ## Entities
 

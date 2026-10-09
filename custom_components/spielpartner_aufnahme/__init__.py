@@ -18,7 +18,10 @@ from .const import (
     SERVICE_POST,
     SERVICE_PREPARE,
     SERVICE_SET_COUNTERS,
+    SUBENTRY_CAM,
+    SUBENTRY_PARTNER,
 )
+from .entity import cam_device, partner_device
 from .manager import SpielpartnerManager
 
 PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.BUTTON]
@@ -91,7 +94,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SpielpartnerConfigEntry)
     await manager.async_load()
     entry.runtime_data = manager
 
-    dr.async_get(hass).async_get_or_create(
+    registry = dr.async_get(hass)
+    hub = registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.entry_id)},
         name="Spielpartner Aufnahme",
@@ -99,6 +103,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: SpielpartnerConfigEntry)
         model="Aufnahme-Verwaltung",
         entry_type=dr.DeviceEntryType.SERVICE,
     )
+    for sid, sub in entry.subentries.items():
+        if sub.subentry_type == SUBENTRY_PARTNER:
+            p = manager.partners.get(sub.data["kennung"])
+            info = partner_device(manager, p) if p else None
+        elif sub.subentry_type == SUBENTRY_CAM:
+            cam = next((c for c in manager.cams if c.subentry_id == sid), None)
+            info = cam_device(manager, cam) if cam else None
+        else:
+            info = None
+        if info:
+            device = registry.async_get_or_create(
+                config_entry_id=entry.entry_id,
+                config_subentry_id=sid,
+                identifiers=info["identifiers"],
+                name=info["name"],
+                manufacturer=info["manufacturer"],
+                model=info["model"],
+            )
+            registry.async_update_device(device.id, via_device_id=hub.id)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     manager.async_start()
     entry.async_on_unload(entry.add_update_listener(_reload_on_change))

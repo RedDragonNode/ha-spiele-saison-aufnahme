@@ -24,7 +24,7 @@ from .const import (
     CONF_BASE_UNIX,
     CONF_BASE_WIN,
     CONF_CAM_CAMERA,
-    CONF_CAM_FILTER,
+    CONF_CAM_POST,
     CONF_CAM_KUERZEL,
     CONF_CAM_NAME,
     CONF_DISCORD_TOKEN,
@@ -35,6 +35,7 @@ from .const import (
     CONF_KENNUNG,
     CONF_ORDNER_NR,
     CONF_POST_DELAY,
+    CONF_POST_GAP,
     CONF_RECORDING_ENTITY,
     CONF_SWING_ENTITY,
     CONF_TOOL_BASE_BTN,
@@ -78,8 +79,8 @@ class CamCfg:
     subentry_id: str
     name: str
     kuerzel: str
-    filter_entity: str
     camera_entity: str
+    post: bool
 
 
 class SpielpartnerManager:
@@ -94,6 +95,7 @@ class SpielpartnerManager:
         self._lock = asyncio.Lock()
         self._unsubs: list[CALLBACK_TYPE] = []
         self._post_cancel: CALLBACK_TYPE | None = None
+        self._post_task: asyncio.Task[None] | None = None
         self.partners: dict[str, PartnerCfg] = {}
         self.cams: list[CamCfg] = []
         self._read_subentries()
@@ -113,13 +115,14 @@ class SpielpartnerManager:
                 )
                 self.partners[p.kennung] = p
             elif sub.subentry_type == SUBENTRY_CAM:
+                camera = d.get(CONF_CAM_CAMERA, "") or ""
                 self.cams.append(
                     CamCfg(
                         subentry_id=sid,
                         name=d[CONF_CAM_NAME],
                         kuerzel=d[CONF_CAM_KUERZEL],
-                        filter_entity=d.get(CONF_CAM_FILTER, "") or "",
-                        camera_entity=d.get(CONF_CAM_CAMERA, "") or "",
+                        camera_entity=camera,
+                        post=bool(d.get(CONF_CAM_POST, bool(camera))),
                     )
                 )
         self.cams.sort(key=lambda c: logic.norm(c.name))
@@ -158,6 +161,8 @@ class SpielpartnerManager:
         if self._post_cancel:
             self._post_cancel()
             self._post_cancel = None
+        if self._post_task and not self._post_task.done():
+            self._post_task.cancel()
         await self._store.async_save(self.data)
 
     # ---------------------------------------------------------------- Helfer
@@ -210,23 +215,19 @@ class SpielpartnerManager:
             self.opt(CONF_FORMAT_SUFFIX) or "",
         )
 
-    def _source_filters(self, only_on: bool = False) -> list[tuple[str, str]]:
+    def _source_filters(self) -> list[tuple[str, str]]:
         res = []
         for st in self.hass.states.async_all("switch"):
             if st.attributes.get("filter_kind") != "source_record_filter":
                 continue
             if st.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 continue
-            if only_on and st.state != STATE_ON:
-                continue
             res.append((st.entity_id, str(st.attributes.get("source", ""))))
         return res
 
-    def cam_filters(self, cam: CamCfg, only_on: bool = False) -> list[str]:
-        available = self._source_filters(only_on)
-        if cam.filter_entity:
-            return [cam.filter_entity] if cam.filter_entity in {e for e, _ in available} else []
-        return logic.match_filters(cam.name, available)
+    def cam_filters(self, cam: CamCfg) -> list[str]:
+        """Source-Record-Filter der Cam (automatisch ueber den Cam-Namen)."""
+        return logic.match_filters(cam.name, self._source_filters())
 
     # ------------------------------------------------------------------- OBS
     async def _obs_set(self, entity_id: str, settings: dict[str, Any]) -> None:
@@ -434,48 +435,66 @@ class SpielpartnerManager:
         return f"neuer Thread angelegt ({thread})"
 
     async def async_post_update(self, kennung: str | None = None) -> dict[str, Any]:
-        """Statusbeitrag mit Video-IDs, Schaukel-Position und Schnappschuessen."""
+        """Statusbeitrag starten: Kopfzeile, danach jede angehakte Cam einzeln und zeitlich versetzt."""
         p = self.partner(kennung) if kennung else self.active
         if p is None:
             raise ServiceValidationError("Kein aktiver Spielpartner")
         s = self.state_of(p.kennung)
-        client = self._discord()
-        if client is None or not s["thread_id"]:
+        if self._discord() is None or not s["thread_id"]:
             persistent_notification.async_create(
                 self.hass,
                 f"Fuer {p.anzeige} gibt es keinen aktuellen Saison-Thread. Bitte zuerst 'Aufnahme vorbereiten' ausfuehren.",
                 title="Kein Discord-Thread gefunden",
                 notification_id=f"{DOMAIN}_kein_thread_{p.kennung}",
             )
-            return {"gepostet": False}
-        lines, images = [], []
-        stamp = dt_util.now().strftime("%Y%m%d_%H%M%S")
-        for cam in self.cams:
-            if not self.cam_filters(cam, only_on=True):
-                continue
-            lines.append(f"{cam.name}: {self.format_for(p.kennung, cam)}")
-            if cam.camera_entity:
-                try:
-                    img = await async_get_image(self.hass, cam.camera_entity)
-                    ext = "png" if "png" in (img.content_type or "") else "jpg"
-                    images.append((f"{cam.name}_{stamp}.{ext}", img.content, img.content_type or "image/jpeg"))
-                except HomeAssistantError as err:
-                    _LOGGER.warning("Schnappschuss von %s fehlgeschlagen: %s", cam.camera_entity, err)
+            return {"gepostet": False, "grund": "kein Thread"}
+        cams = [c for c in self.cams if c.post]
+        if not cams:
+            return {"gepostet": False, "grund": "bei keiner Cam ist 'In Discord posten' angehakt"}
+        # IDs jetzt festhalten: sie gehoeren zu dieser Aufnahme, auch wenn sich Zaehler spaeter aendern
+        items = [(c, self.format_for(p.kennung, c)) for c in cams]
+        if self._post_task and not self._post_task.done():
+            self._post_task.cancel()
+        self._post_task = self.hass.async_create_background_task(
+            self._post_sequence(p, s["thread_id"], items), name=f"{DOMAIN}_post"
+        )
+        gap = int(self.opt(CONF_POST_GAP) or 0)
+        return {"gepostet": True, "cams": [c.name for c in cams], "abstand_sekunden": gap}
+
+    async def _post_sequence(self, p: PartnerCfg, thread_id: str, items: list[tuple[CamCfg, str]]) -> None:
+        client = self._discord()
+        if client is None:
+            return
+        gap = max(0, int(self.opt(CONF_POST_GAP) or 0))
         swing = None
         swing_entity = self.opt(CONF_SWING_ENTITY)
         if swing_entity and (st := self.hass.states.get(swing_entity)):
             swing = st.attributes.get("current_position", st.state)
-        text = logic.build_post_text(int(self.opt(CONF_POST_DELAY) or 5), swing, lines)
+        sent = 0
         try:
-            await client.post_message(s["thread_id"], text, images)
+            await client.post_message(thread_id, logic.build_post_header(int(self.opt(CONF_POST_DELAY) or 5), swing))
+            for i, (cam, video_id) in enumerate(items):
+                if i and gap:
+                    await asyncio.sleep(gap)
+                images = []
+                if cam.camera_entity:
+                    try:
+                        img = await async_get_image(self.hass, cam.camera_entity)
+                        ext = "png" if "png" in (img.content_type or "") else "jpg"
+                        stamp = dt_util.now().strftime("%Y%m%d_%H%M%S")
+                        images.append((f"{cam.name}_{stamp}.{ext}", img.content, img.content_type or "image/jpeg"))
+                    except HomeAssistantError as err:
+                        _LOGGER.warning("Schnappschuss von %s fehlgeschlagen: %s", cam.camera_entity, err)
+                if images:
+                    await client.post_message(thread_id, "", images)  # erst das Bild ...
+                await client.post_message(thread_id, logic.build_cam_caption(cam.name, video_id))  # ... direkt darunter die ID
+                sent += 1
         except DiscordError as err:
             _LOGGER.error("Discord-Beitrag fehlgeschlagen: %s", err)
             self._set_status(f"Discord-Beitrag fehlgeschlagen: {err}")
-            self.notify()
-            return {"gepostet": False, "fehler": str(err)}
-        self._set_status(f"{p.anzeige}: Statusbeitrag gepostet ({len(images)} Bilder)")
+        else:
+            self._set_status(f"{p.anzeige}: Statusbeitrag gepostet ({sent} Cams)")
         self.notify()
-        return {"gepostet": True, "bilder": len(images), "zeilen": lines}
 
     # ------------------------------------------------------------------ Zaehler
     async def async_count_recording(self, kennung: str | None = None) -> None:

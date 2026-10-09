@@ -35,7 +35,6 @@ def partner_device(manager: SpielpartnerManager, p: PartnerCfg) -> DeviceInfo:
         name=f"Spielpartner {p.anzeige}",
         manufacturer="RedDragonNode",
         model="Spielpartner",
-        via_device=(DOMAIN, manager.entry.entry_id),
     )
 
 
@@ -45,5 +44,4 @@ def cam_device(manager: SpielpartnerManager, c: CamCfg) -> DeviceInfo:
         name=f"Cam {c.name}",
         manufacturer="RedDragonNode",
         model="Cam",
-        via_device=(DOMAIN, manager.entry.entry_id),
     )

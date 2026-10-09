@@ -1,43 +1,33 @@
 # Migration vom alten System
 
-Das alte System bleibt **unverändert aktiv**, bis du bewusst umschaltest. Beide parallel laufen zu lassen,
-verfälscht keine Daten – nur Aufnahmen werden doppelt gezählt, wenn beide Systeme laufen. Also: erst ein
-Spielpartner testen, dann das alte System abschalten.
+Wichtig vorab: **Altes und neues System dürfen nicht gleichzeitig in OBS schreiben.** Die alte Automation
+„Aufnahme beendet – Zähler hochzählen“ schreibt nach jeder Aufnahme das alte Dateiformat (mit den alten
+Zählern) in alle OBS-Filter und überschreibt damit das Format der Integration. Genauso postet die alte
+5-Minuten-Automation weiter in Discord. Beide also ausschalten, sobald die Integration übernimmt.
 
-## 1. Integration einrichten und Spielpartner übernehmen
+## 1. Spielpartner anlegen
 
-Pro Spielpartner: *Spielpartner hinzufügen*, Kennung eintragen (der Suffix der alten Helfer, z. B. `frank_visselff`),
-Haken bei **Alte Helfer übernehmen**. Gelesen werden:
+Pro Spielpartner: *Spielpartner hinzufügen*. Kennung (z. B. `frank_visselff`), Anzeigename, Ordner-Nummer und
+Discord-Forum-Kanal-ID eintragen. Die Startwerte für Saison, Aufnahmen in Saison und Aufnahmen gesamt aus den
+alten Zählern (`counter.saison_mit_<kennung>`, `counter.aufnahmen_in_aktueller_saison_mit_<kennung>`,
+`counter.gesamt_aufnahmen_mit_<kennung>`) von Hand übernehmen. Später lassen sie sich an den Zahlenfeldern des
+Spielpartner-Geräts korrigieren.
 
-| Alter Helfer | wird zu |
-|---|---|
-| `counter.saison_mit_<kennung>` | Zähler Saison |
-| `counter.aufnahmen_in_aktueller_saison_mit_<kennung>` | Zähler Aufnahmen in Saison |
-| `counter.gesamt_aufnahmen_mit_<kennung>` | Zähler Aufnahmen gesamt |
-| `input_text.video_ordner_<kennung>` (oder `_master`) | Anzeigename und Ordner-Nummer |
-| `input_text.discord_kanal_id_log_<kennung>` | Forum-Kanal-ID |
-| `input_text.discord_thread_saison_<kennung>` (`id\|saison`) | vorhandener Saison-Thread |
+## 2. Cams für Discord auswählen
 
-Ist ein Helfer nicht vorhanden, gelten Vorgaben (Zähler 1) oder die Felder im Formular. Prüfe danach die drei
-Zahlenfelder am Spielpartner-Gerät und korrigiere sie bei Bedarf direkt.
-
-## 2. Discord
-
-Den Bot-Token (derselbe wie beim bisherigen `notify`/`rest_command`) in den Einstellungen eintragen.
+Bei jeder Cam, die im Discord-Beitrag erscheinen soll, **„In Discord posten“** anhaken (und eine Kamera für den
+Schnappschuss hinterlegen).
 
 ## 3. Testlauf
 
-Button *Aufnahme vorbereiten* drücken, Benachrichtigung lesen, in OBS Pfad und Dateinamen eines Source-Record-Filters prüfen.
+Button *Aufnahme vorbereiten* drücken, Benachrichtigung lesen, in OBS Pfad und Dateinamen prüfen.
 
 ## 4. Altes System abschalten
 
-Erst wenn der Testlauf stimmt:
-
-- Skript `script.aufnahme_vorbereitung` und `script.obs_source_record_format` entfernen
-- Automationen *Aufnahme beendet – Zähler hochzählen* und *Aufnahme läuft 5 Min – …* entfernen
-  (**beide** – sonst wird doppelt gezählt/gepostet)
-- Helfer pro Spielpartner (Zähler, Thread, Kanal-ID, Dateiformat, Speicher-Adresse, Ordner) löschen
+- Automationen *Aufnahme beendet – Zähler hochzählen* und *Aufnahme läuft 5 Min – …* ausschalten
+- Skript `script.aufnahme_vorbereitung` und `script.obs_source_record_format` nicht mehr aufrufen und später entfernen
+- Helfer pro Spielpartner (Zähler, Thread, Kanal-ID, Dateiformat, Speicher-Adresse, Ordner) später löschen
 - Dashboard-Knöpfe auf den neuen Button/Service umstellen (siehe [Dashboard](dashboard.md))
 
-Nicht zur Integration gehören und bleiben deshalb bestehen: Lichtsteuerung (*Saison ist zuende*,
+Nicht zur Integration gehören und bleiben bestehen: Lichtsteuerung (*Saison ist zuende*,
 *Saison aufnahmen => Licht Steuerung*) und alles von ha-obs-stream-monitor.

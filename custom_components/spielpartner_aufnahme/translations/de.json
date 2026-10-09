@@ -12,6 +12,7 @@
           "dateiformat_endung": "Endung des Dateinamens (z.B. ' (4K) %DD.%MM.%CCYY')",
           "aufnahme_entity": "Entity, die anzeigt, ob OBS aufnimmt",
           "post_nach_minuten": "Statusbeitrag nach x Minuten Aufnahme",
+          "post_abstand_sekunden": "Abstand zwischen den Cam-Beiträgen in Sekunden",
           "schaukel_entity": "Schaukel-Cover (optional, für die Position im Beitrag)",
           "werkzeug_basis_button": "Ordner-Werkzeug: Button 'zur Basis wechseln'",
           "werkzeug_wechseln_button": "Ordner-Werkzeug: Button 'in Ordner wechseln'",
@@ -39,6 +40,7 @@
           "dateiformat_endung": "Endung des Dateinamens (z.B. ' (4K) %DD.%MM.%CCYY')",
           "aufnahme_entity": "Entity, die anzeigt, ob OBS aufnimmt",
           "post_nach_minuten": "Statusbeitrag nach x Minuten Aufnahme",
+          "post_abstand_sekunden": "Abstand zwischen den Cam-Beiträgen in Sekunden",
           "schaukel_entity": "Schaukel-Cover (optional, für die Position im Beitrag)",
           "werkzeug_basis_button": "Ordner-Werkzeug: Button 'zur Basis wechseln'",
           "werkzeug_wechseln_button": "Ordner-Werkzeug: Button 'in Ordner wechseln'",
@@ -61,13 +63,12 @@
       "step": {
         "user": {
           "title": "Neuer Spielpartner",
-          "description": "Kennung = kleiner Suffix der alten Helfer (z.B. frank_visselff). Mit 'Alte Helfer übernehmen' werden Zähler, Forum-Kanal, Thread und Ordner-Nummer aus den bisherigen Helfern gelesen.",
+          "description": "Kennung = kleiner Suffix ohne Leerzeichen (z.B. frank_visselff). Die Startwerte bestimmen, mit welchen Zählern der Spielpartner beginnt (leer = 1).",
           "data": {
             "kennung": "Kennung (a-z, 0-9, _)",
             "anzeige": "Anzeigename (leer = aus Kennung)",
             "ordner_nr": "Ordner-Nummer (#01)",
             "forum_id": "Discord-Forum-Kanal-ID",
-            "alte_helfer_uebernehmen": "Alte Helfer übernehmen",
             "start_saison": "Start: Saison",
             "start_aufnahmen_in_saison": "Start: Aufnahmen in Saison",
             "start_gesamt": "Start: Aufnahmen gesamt"
@@ -102,16 +103,16 @@
           "data": {
             "name": "Name (wie in OBS, z.B. Fuchsblick)",
             "kuerzel": "Kürzel (z.B. FB)",
-            "filter_entity": "OBS-Filter-Schalter (leer = automatisch über den Namen)",
-            "kamera_entity": "Kamera für Schnappschüsse (optional)"
+            "kamera_entity": "Kamera für Schnappschüsse (optional)",
+            "discord_posten": "In Discord posten"
           }
         },
         "reconfigure": {
           "title": "Cam bearbeiten",
           "data": {
             "kuerzel": "Kürzel",
-            "filter_entity": "OBS-Filter-Schalter (leer = automatisch)",
-            "kamera_entity": "Kamera für Schnappschüsse (optional)"
+            "kamera_entity": "Kamera für Schnappschüsse (optional)",
+            "discord_posten": "In Discord posten"
           }
         }
       },

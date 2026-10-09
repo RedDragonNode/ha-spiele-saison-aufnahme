@@ -149,10 +149,10 @@ async def test_prepare_with_folder_tool_new_season(hass: HomeAssistant) -> None:
 
 
 async def test_recording_cycle_counts_and_posts(hass: HomeAssistant) -> None:
-    entry = await _entry(hass)
+    options = {**OPTIONS, "post_abstand_sekunden": 0}
+    entry = await _entry(hass, options)
     calls = _obs(hass)
     hass.states.async_set("binary_sensor.rec", "off")
-    hass.states.async_set("camera.fuchsblick_schnappschusse_in_hochauflosung", "idle")
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     m = entry.runtime_data
@@ -171,9 +171,17 @@ async def test_recording_cycle_counts_and_posts(hass: HomeAssistant) -> None:
         "custom_components.spielpartner_aufnahme.manager.async_get_image", AsyncMock(return_value=FakeImg())
     ):
         r = await m.async_post_update()
-    assert r["gepostet"] and posted[0][0] == "99"
-    assert "Fuchsblick: #01.02.03.FB.14" in posted[0][1]
-    assert posted[0][2][0][0].startswith("Fuchsblick_")
+        await m._post_task
+    # nur Fuchsblick und Hoelenblick sind standardmaessig zum Posten angehakt
+    assert r["gepostet"] and r["cams"] == ["Fuchsblick", "Hoelenblick"]
+    assert all(p[0] == "99" for p in posted)
+    assert posted[0][1].startswith("Aufnahme laeuft seit 5 Minuten.")
+    # je Cam: erst das Bild, direkt darunter die ID
+    assert posted[1][1] == "" and posted[1][2][0][0].startswith("Fuchsblick_")
+    assert "Fuchsblick" in posted[2][1] and "#01.02.03.FB.14" in posted[2][1] and posted[2][2] is None
+    assert posted[3][2][0][0].startswith("Hoelenblick_")
+    assert "#01.02.03.HB.14" in posted[4][1]
+    assert len(posted) == 5
     hass.states.async_set("binary_sensor.rec", "on")
     await hass.async_block_till_done()
     hass.states.async_set("binary_sensor.rec", "off")
@@ -213,24 +221,20 @@ async def test_config_flow_and_subentry_flow(hass: HomeAssistant) -> None:
     entry = res["result"]
     await hass.async_block_till_done()
     assert sum(1 for s in entry.subentries.values() if s.subentry_type == SUBENTRY_CAM) == 16
-    # alte Helfer fuer den Import
-    hass.states.async_set("counter.saison_mit_neu_a", "4")
-    hass.states.async_set("counter.gesamt_aufnahmen_mit_neu_a", "21")
-    hass.states.async_set("input_text.video_ordner_neu_a_master", "Spielen mit Neu A #07")
-    hass.states.async_set("input_text.discord_thread_saison_neu_a", "123|04")
     flow = await hass.config_entries.subentries.async_init((entry.entry_id, SUBENTRY_PARTNER), context={"source": "user"})
     assert flow["type"] == "form"
     bad = await hass.config_entries.subentries.async_configure(flow["flow_id"], {"kennung": "Gross Klein"})
     assert bad["errors"]["kennung"] == "invalid_kennung"
     done = await hass.config_entries.subentries.async_configure(
-        flow["flow_id"], {"kennung": "neu_a", "alte_helfer_uebernehmen": True}
+        flow["flow_id"],
+        {"kennung": "neu_a", "anzeige": "Neu A", "ordner_nr": 7, "start_saison": 4, "start_gesamt": 21},
     )
     assert done["type"] == "create_entry"
     await hass.async_block_till_done()
     sub = next(s for s in entry.subentries.values() if s.subentry_type == SUBENTRY_PARTNER)
     assert sub.data["anzeige"] == "Neu A" and sub.data["ordner_nr"] == 7
-    assert sub.data["initial"]["saison"] == 4 and sub.data["initial"]["gesamt"] == 21
-    assert sub.data["initial"]["thread_id"] == "123"
+    assert sub.data["initial"] == {"saison": 4, "gesamt": 21}
+    assert "alte_helfer_uebernehmen" not in sub.data
     m = entry.runtime_data
     assert m.state_of("neu_a")["saison"] == 4
 
@@ -248,3 +252,23 @@ async def test_options_flow_reloads(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
     assert entry.options["post_nach_minuten"] == 9
     assert entry.runtime_data.opt("post_nach_minuten") == 9
+
+
+async def test_cam_subentry_checkbox(hass: HomeAssistant) -> None:
+    entry = await _entry(hass)
+    _obs(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    sid, sub = next((i, s) for i, s in entry.subentries.items() if s.data.get("name") == "Kesselcam")
+    assert sub.data["discord_posten"] is False
+    flow = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_CAM), context={"source": "reconfigure", "subentry_id": sid}
+    )
+    assert flow["type"] == "form" and "filter_entity" not in {str(k) for k in flow["data_schema"].schema}
+    res = await hass.config_entries.subentries.async_configure(
+        flow["flow_id"], {"kuerzel": "KC", "discord_posten": True, "kamera_entity": "camera.kessel"}
+    )
+    await hass.async_block_till_done()
+    assert res["type"] == "abort"
+    assert entry.subentries[sid].data["discord_posten"] is True
+    assert [c.name for c in entry.runtime_data.cams if c.post] == ["Fuchsblick", "Hoelenblick", "Kesselcam"]

@@ -34,7 +34,7 @@ def test_paths_and_thread():
     assert logic.valid_kennung("frank_visselff") and not logic.valid_kennung("Frank X")
 
 
-def test_post_text():
-    t = logic.build_post_text(5, 40, ["Fuchsblick: #01.01.01.FB.01"])
-    assert "40%" in t and "Fuchsblick" in t
-    assert "unbekannt" in logic.build_post_text(5, None, [])
+def test_post_texts():
+    assert "40%" in logic.build_post_header(5, 40)
+    assert "unbekannt" in logic.build_post_header(5, None)
+    assert logic.build_cam_caption("Fuchsblick", "#01.02.03.FB.04") == "**Fuchsblick**: `#01.02.03.FB.04`"

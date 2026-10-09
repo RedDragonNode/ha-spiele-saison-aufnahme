@@ -14,7 +14,7 @@ from homeassistant.config_entries import (
     OptionsFlow,
     SubentryFlowResult,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from . import logic
@@ -23,14 +23,13 @@ from .const import (
     CONF_BASE_UNIX,
     CONF_BASE_WIN,
     CONF_CAM_CAMERA,
-    CONF_CAM_FILTER,
+    CONF_CAM_POST,
     CONF_CAM_KUERZEL,
     CONF_CAM_NAME,
     CONF_DISCORD_TOKEN,
     CONF_FOLDER_PREFIX,
     CONF_FORMAT_SUFFIX,
     CONF_FORUM_ID,
-    CONF_IMPORT_OLD,
     CONF_INIT_AUFNAHMEN,
     CONF_INIT_GESAMT,
     CONF_INIT_SAISON,
@@ -38,6 +37,7 @@ from .const import (
     CONF_KENNUNG,
     CONF_ORDNER_NR,
     CONF_POST_DELAY,
+    CONF_POST_GAP,
     CONF_RECORDING_ENTITY,
     CONF_SWING_ENTITY,
     CONF_TOOL_BASE_BTN,
@@ -88,6 +88,7 @@ SETTINGS_SCHEMA = vol.Schema(
         vol.Optional(CONF_FORMAT_SUFFIX): _TEXT,
         vol.Required(CONF_RECORDING_ENTITY): _ent("binary_sensor", "switch"),
         vol.Required(CONF_POST_DELAY): _num(1, 120),
+        vol.Optional(CONF_POST_GAP): _num(0, 300),
         vol.Optional(CONF_SWING_ENTITY): _ent("cover"),
         vol.Optional(CONF_TOOL_BASE_BTN): _ent("button"),
         vol.Optional(CONF_TOOL_ENTER_BTN): _ent("button"),
@@ -102,7 +103,7 @@ SETTINGS_SCHEMA = vol.Schema(
 
 def _clean(user_input: dict[str, Any]) -> dict[str, Any]:
     out = {k: v for k, v in user_input.items() if v not in (None, "")}
-    for key in (CONF_POST_DELAY, CONF_TOOL_TIMEOUT):
+    for key in (CONF_POST_DELAY, CONF_POST_GAP, CONF_TOOL_TIMEOUT):
         if key in out:
             out[key] = int(out[key])
     return out
@@ -117,8 +118,8 @@ def _default_subentries() -> list[ConfigSubentryData]:
             data={
                 CONF_CAM_NAME: name,
                 CONF_CAM_KUERZEL: kuerzel,
-                CONF_CAM_FILTER: "",
                 CONF_CAM_CAMERA: DEFAULT_CAMERAS.get(name, ""),
+                CONF_CAM_POST: name in DEFAULT_CAMERAS,
             },
         )
         for name, kuerzel in DEFAULT_CAMS.items()
@@ -160,39 +161,6 @@ class SpielpartnerOptionsFlow(OptionsFlow):
 
 
 # --------------------------------------------------------------- Spielpartner
-def read_old_helpers(hass: HomeAssistant, kennung: str) -> dict[str, Any]:
-    """Werte aus den alten Helfern (Skript-Zeit) uebernehmen, soweit vorhanden."""
-
-    def state(entity_id: str) -> str | None:
-        st = hass.states.get(entity_id)
-        return st.state if st and st.state not in ("unknown", "unavailable", "") else None
-
-    out: dict[str, Any] = {}
-    raw = state(f"input_text.video_ordner_{kennung}") or state(f"input_text.video_ordner_{kennung}_master")
-    name, nr = logic.parse_folder_name(raw or "")
-    if name:
-        out["anzeige"] = name
-    if nr:
-        out["ordner_nr"] = nr
-    if forum := state(f"input_text.discord_kanal_id_log_{kennung}"):
-        out["forum_id"] = forum
-    for key, entity in (
-        ("saison", f"counter.saison_mit_{kennung}"),
-        ("aufnahmen", f"counter.aufnahmen_in_aktueller_saison_mit_{kennung}"),
-        ("gesamt", f"counter.gesamt_aufnahmen_mit_{kennung}"),
-    ):
-        val = state(entity)
-        if val is not None:
-            try:
-                out[key] = int(float(val))
-            except ValueError:
-                pass
-    thread_id, thread_saison = logic.unpack_thread(state(f"input_text.discord_thread_saison_{kennung}"))
-    if thread_id:
-        out["thread_id"], out["thread_saison"] = thread_id, thread_saison
-    return out
-
-
 class PartnerSubentryFlow(ConfigSubentryFlow):
     """Spielpartner anlegen / bearbeiten."""
 
@@ -212,20 +180,17 @@ class PartnerSubentryFlow(ConfigSubentryFlow):
             elif kennung in self._existing():
                 errors[CONF_KENNUNG] = "already_configured"
             else:
-                old = read_old_helpers(self.hass, kennung) if user_input.get(CONF_IMPORT_OLD) else {}
-                anzeige = (user_input.get(CONF_ANZEIGE) or old.get("anzeige") or logic.default_anzeige(kennung)).strip()
+                anzeige = (user_input.get(CONF_ANZEIGE) or logic.default_anzeige(kennung)).strip()
                 initial = {
-                    "saison": user_input.get(CONF_INIT_SAISON) or old.get("saison"),
-                    "aufnahmen": user_input.get(CONF_INIT_AUFNAHMEN) or old.get("aufnahmen"),
-                    "gesamt": user_input.get(CONF_INIT_GESAMT) or old.get("gesamt"),
-                    "thread_id": old.get("thread_id", ""),
-                    "thread_saison": old.get("thread_saison", ""),
+                    "saison": user_input.get(CONF_INIT_SAISON),
+                    "aufnahmen": user_input.get(CONF_INIT_AUFNAHMEN),
+                    "gesamt": user_input.get(CONF_INIT_GESAMT),
                 }
                 data = {
                     CONF_KENNUNG: kennung,
                     CONF_ANZEIGE: anzeige,
-                    CONF_ORDNER_NR: int(user_input.get(CONF_ORDNER_NR) or old.get("ordner_nr") or 1),
-                    CONF_FORUM_ID: str(user_input.get(CONF_FORUM_ID) or old.get("forum_id") or "").strip(),
+                    CONF_ORDNER_NR: int(user_input.get(CONF_ORDNER_NR) or 1),
+                    CONF_FORUM_ID: str(user_input.get(CONF_FORUM_ID) or "").strip(),
                     CONF_INITIAL: {k: v for k, v in initial.items() if v not in (None, "")},
                 }
                 return self.async_create_entry(title=anzeige, data=data, unique_id=kennung)
@@ -235,7 +200,6 @@ class PartnerSubentryFlow(ConfigSubentryFlow):
                 vol.Optional(CONF_ANZEIGE): _TEXT,
                 vol.Optional(CONF_ORDNER_NR): _num(1, 99),
                 vol.Optional(CONF_FORUM_ID): _TEXT,
-                vol.Optional(CONF_IMPORT_OLD, default=False): selector.BooleanSelector(),
                 vol.Optional(CONF_INIT_SAISON): _num(1, 999),
                 vol.Optional(CONF_INIT_AUFNAHMEN): _num(1, 9999),
                 vol.Optional(CONF_INIT_GESAMT): _num(1, 9999),
@@ -270,12 +234,12 @@ class CamSubentryFlow(ConfigSubentryFlow):
     """Cam mit Kuerzel anlegen / bearbeiten."""
 
     @staticmethod
-    def _schema(with_name: bool) -> vol.Schema:
+    def _schema(with_name: bool, post_default: bool = False) -> vol.Schema:
         fields: dict[Any, Any] = {}
         if with_name:
             fields[vol.Required(CONF_CAM_NAME)] = _TEXT
         fields[vol.Required(CONF_CAM_KUERZEL)] = _TEXT
-        fields[vol.Optional(CONF_CAM_FILTER)] = _ent("switch")
+        fields[vol.Optional(CONF_CAM_POST, default=post_default)] = selector.BooleanSelector()
         fields[vol.Optional(CONF_CAM_CAMERA)] = _ent("camera")
         return vol.Schema(fields)
 
@@ -296,8 +260,8 @@ class CamSubentryFlow(ConfigSubentryFlow):
                 data = {
                     CONF_CAM_NAME: name,
                     CONF_CAM_KUERZEL: user_input[CONF_CAM_KUERZEL].strip(),
-                    CONF_CAM_FILTER: user_input.get(CONF_CAM_FILTER, "") or "",
                     CONF_CAM_CAMERA: user_input.get(CONF_CAM_CAMERA, "") or "",
+                    CONF_CAM_POST: bool(user_input.get(CONF_CAM_POST, False)),
                 }
                 return self.async_create_entry(title=name, data=data, unique_id=logic.norm(name))
         return self.async_show_form(
@@ -311,15 +275,20 @@ class CamSubentryFlow(ConfigSubentryFlow):
             if not user_input[CONF_CAM_KUERZEL].strip():
                 errors[CONF_CAM_KUERZEL] = "kuerzel_required"
             else:
-                data = {
-                    **sub.data,
-                    CONF_CAM_KUERZEL: user_input[CONF_CAM_KUERZEL].strip(),
-                    CONF_CAM_FILTER: user_input.get(CONF_CAM_FILTER, "") or "",
-                    CONF_CAM_CAMERA: user_input.get(CONF_CAM_CAMERA, "") or "",
-                }
+                data = {k: v for k, v in sub.data.items() if k != "filter_entity"}
+                data.update(
+                    {
+                        CONF_CAM_KUERZEL: user_input[CONF_CAM_KUERZEL].strip(),
+                        CONF_CAM_CAMERA: user_input.get(CONF_CAM_CAMERA, "") or "",
+                        CONF_CAM_POST: bool(user_input.get(CONF_CAM_POST, False)),
+                    }
+                )
                 return self.async_update_and_abort(self._get_entry(), sub, data=data)
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=_suggest(self._schema(False), user_input or dict(sub.data)),
+            data_schema=_suggest(
+                self._schema(False, bool(sub.data.get(CONF_CAM_POST, bool(sub.data.get(CONF_CAM_CAMERA))))),
+                user_input or dict(sub.data),
+            ),
             errors=errors,
         )

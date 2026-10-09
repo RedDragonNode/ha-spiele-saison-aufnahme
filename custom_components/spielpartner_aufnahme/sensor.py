@@ -144,4 +144,5 @@ class CamFormatSensor(SpielpartnerEntity, SensorEntity):
             "kuerzel": self.cam.kuerzel,
             "obs_filter": self.manager.cam_filters(self.cam),
             "kamera": self.cam.camera_entity or None,
+            "in_discord_posten": self.cam.post,
         }

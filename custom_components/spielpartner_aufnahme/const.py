@@ -14,6 +14,7 @@ CONF_FOLDER_PREFIX = "ordner_praefix"
 CONF_FORMAT_SUFFIX = "dateiformat_endung"
 CONF_RECORDING_ENTITY = "aufnahme_entity"
 CONF_POST_DELAY = "post_nach_minuten"
+CONF_POST_GAP = "post_abstand_sekunden"
 CONF_SWING_ENTITY = "schaukel_entity"
 CONF_TOOL_BASE_BTN = "werkzeug_basis_button"
 CONF_TOOL_ENTER_BTN = "werkzeug_wechseln_button"
@@ -30,6 +31,7 @@ DEFAULT_OPTIONS: dict[str, object] = {
     CONF_FORMAT_SUFFIX: " (4K) %DD.%MM.%CCYY",
     CONF_RECORDING_ENTITY: "binary_sensor.obs_stream_gay_fox_88_aufnahme",
     CONF_POST_DELAY: 5,
+    CONF_POST_GAP: 20,
     CONF_TOOL_BASE_BTN: "button.spielzimmer_pc_ordner_werkzeug_zur_basis_wechseln",
     CONF_TOOL_ENTER_BTN: "button.spielzimmer_pc_ordner_werkzeug_in_ordner_wechseln",
     CONF_TOOL_NAME_TEXT: "text.spielzimmer_pc_ordner_werkzeug_neuer_ordner_name",
@@ -44,7 +46,6 @@ CONF_KENNUNG = "kennung"
 CONF_ANZEIGE = "anzeige"
 CONF_ORDNER_NR = "ordner_nr"
 CONF_FORUM_ID = "forum_id"
-CONF_IMPORT_OLD = "alte_helfer_uebernehmen"
 CONF_INIT_SAISON = "start_saison"
 CONF_INIT_AUFNAHMEN = "start_aufnahmen_in_saison"
 CONF_INIT_GESAMT = "start_gesamt"
@@ -53,7 +54,8 @@ CONF_INITIAL = "initial"  # intern: Startwerte, werden einmalig in den Speicher 
 # --- Cam (Subentry) ------------------------------------------------------------
 CONF_CAM_NAME = "name"
 CONF_CAM_KUERZEL = "kuerzel"
-CONF_CAM_FILTER = "filter_entity"
+CONF_CAM_FILTER = "filter_entity"  # alt, wird nicht mehr genutzt
+CONF_CAM_POST = "discord_posten"
 CONF_CAM_CAMERA = "kamera_entity"
 
 COUNTER_START = 1  # Startwert nach Saisonwechsel / fuer neue Spielpartner
