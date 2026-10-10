@@ -1,8 +1,7 @@
-"""Spielpartner Aufnahme: Spielpartner, Cams, Zaehler, OBS-Dateinamen und Discord an einem Ort."""
+"""Spielpartner Aufnahme: Spielpartner, Cams, Zaehler, Recorder und Discord an einem Ort."""
 from __future__ import annotations
 
 import voluptuous as vol
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
@@ -13,10 +12,11 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     DOMAIN,
-    SERVICE_APPLY_FORMATS,
     SERVICE_COUNT,
     SERVICE_POST,
     SERVICE_PREPARE,
+    SERVICE_REC_START,
+    SERVICE_REC_STOP,
     SERVICE_SET_COUNTERS,
     SUBENTRY_CAM,
     SUBENTRY_PARTNER,
@@ -24,7 +24,7 @@ from .const import (
 from .entity import cam_device, partner_device
 from .manager import SpielpartnerManager
 
-PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.BUTTON]
+PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.BUTTON, Platform.BINARY_SENSOR]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 type SpielpartnerConfigEntry = ConfigEntry[SpielpartnerManager]
@@ -56,9 +56,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def post(call: ServiceCall) -> dict:
         return await _manager(hass).async_post_update(call.data.get("spielpartner"))
 
-    async def apply_formats(call: ServiceCall) -> dict:
-        return await _manager(hass).async_apply_formats(call.data.get("spielpartner"))
+    async def rec_start(call: ServiceCall) -> dict:
+        return await _manager(hass).async_recorder_start(call.data.get("spielpartner"))
 
+    async def rec_stop(call: ServiceCall) -> dict:
+        return await _manager(hass).async_recorder_stop()
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_REC_START, rec_start, vol.Schema({_OPT_PARTNER: cv.string}), supports_response=SupportsResponse.OPTIONAL
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_REC_STOP, rec_stop, vol.Schema({}), supports_response=SupportsResponse.OPTIONAL
+    )
     hass.services.async_register(
         DOMAIN, SERVICE_PREPARE, prepare, vol.Schema({_PARTNER: cv.string}), supports_response=SupportsResponse.OPTIONAL
     )
@@ -78,13 +87,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.services.async_register(DOMAIN, SERVICE_COUNT, count, vol.Schema({_OPT_PARTNER: cv.string}))
     hass.services.async_register(
         DOMAIN, SERVICE_POST, post, vol.Schema({_OPT_PARTNER: cv.string}), supports_response=SupportsResponse.OPTIONAL
-    )
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_APPLY_FORMATS,
-        apply_formats,
-        vol.Schema({_OPT_PARTNER: cv.string}),
-        supports_response=SupportsResponse.OPTIONAL,
     )
     return True
 

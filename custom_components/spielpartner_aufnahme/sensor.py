@@ -1,8 +1,12 @@
 """Sensoren."""
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity
-from homeassistant.const import EntityCategory
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
+from homeassistant.const import EntityCategory, UnitOfInformation
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -16,7 +20,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: SpielpartnerConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     m = entry.runtime_data
-    async_add_entities([ActivePartnerSensor(m), StatusSensor(m)])
+    async_add_entities([ActivePartnerSensor(m), StatusSensor(m), RecorderSpaceSensor(m)])
     for sid, sub in entry.subentries.items():
         if sub.subentry_type == SUBENTRY_PARTNER:
             p = m.partners[sub.data["kennung"]]
@@ -142,7 +146,38 @@ class CamFormatSensor(SpielpartnerEntity, SensorEntity):
     def extra_state_attributes(self) -> dict:
         return {
             "kuerzel": self.cam.kuerzel,
-            "obs_filter": self.manager.cam_filters(self.cam),
             "kamera": self.cam.camera_entity or None,
             "in_discord_posten": self.cam.post,
+            "recorder_aufnehmen": self.cam.record,
+            "recorder_quelle": "rtsp_url" if self.cam.rtsp_url else (self.cam.stream_entity or None),
         }
+
+
+class RecorderSpaceSensor(SpielpartnerEntity, SensorEntity):
+    """Freier Speicher am Aufnahme-Ort des Recorders."""
+
+    _attr_translation_key = "recorder_frei"
+    _attr_icon = "mdi:harddisk"
+    _attr_device_class = SensorDeviceClass.DATA_SIZE
+    _attr_native_unit_of_measurement = UnitOfInformation.GIGABYTES
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 0
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, m: SpielpartnerManager) -> None:
+        super().__init__(m)
+        self._attr_unique_id = f"{m.entry.entry_id}_recorder_frei"
+        self._attr_device_info = hub_device(m)
+
+    @property
+    def available(self) -> bool:
+        return bool(self.manager.rec_online)
+
+    @property
+    def native_value(self) -> float | None:
+        return (self.manager.rec_status.get("speicher") or {}).get("frei_gb")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        sp = self.manager.rec_status.get("speicher") or {}
+        return {"gesamt_gb": sp.get("gesamt_gb"), "ordner": self.manager.rec_status.get("wurzel")}

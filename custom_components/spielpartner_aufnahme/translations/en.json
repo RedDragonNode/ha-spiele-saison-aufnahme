@@ -3,24 +3,17 @@
     "step": {
       "user": {
         "title": "Spielpartner Aufnahme",
-        "description": "Basic settings. Everything can be changed later under 'Configure'. The 16 default cams are created too.",
+        "description": "Basic settings. Everything can be changed later. The 16 default cams are created.",
         "data": {
           "discord_token": "Discord bot token (empty = Discord off)",
-          "basis_pfad_obs": "Base path for OBS (forward slashes)",
-          "basis_pfad_windows": "Base path Windows (backslashes)",
           "ordner_praefix": "Folder prefix (e.g. 'Spielen mit')",
           "dateiformat_endung": "File name suffix (e.g. ' (4K) %DD.%MM.%CCYY')",
-          "aufnahme_entity": "Entity showing whether OBS is recording",
+          "aufnahme_entity": "Trigger (optional): switch/sensor - on = start, off = stop",
           "post_nach_minuten": "Status post after x minutes of recording",
           "post_abstand_sekunden": "Gap between cam posts in seconds",
           "schaukel_entity": "Swing cover (optional, position in the post)",
-          "werkzeug_basis_button": "Folder tool: 'go to base' button",
-          "werkzeug_wechseln_button": "Folder tool: 'enter folder' button",
-          "werkzeug_name_text": "Folder tool: 'new folder name' text",
-          "werkzeug_pfad_sensor": "Folder tool: 'current folder path' sensor",
-          "werkzeug_ordner_select": "Folder tool: sub folder select",
-          "werkzeug_status_sensor": "Folder tool: status sensor (optional)",
-          "werkzeug_timeout": "Folder tool: wait time in seconds"
+          "recorder_url": "Recorder: add-on address",
+          "recorder_schluessel": "Recorder: key (add-on api_key)"
         }
       }
     },
@@ -34,21 +27,14 @@
         "title": "Settings",
         "data": {
           "discord_token": "Discord bot token (empty = Discord off)",
-          "basis_pfad_obs": "Base path for OBS (forward slashes)",
-          "basis_pfad_windows": "Base path Windows (backslashes)",
           "ordner_praefix": "Folder prefix (e.g. 'Spielen mit')",
           "dateiformat_endung": "File name suffix (e.g. ' (4K) %DD.%MM.%CCYY')",
-          "aufnahme_entity": "Entity showing whether OBS is recording",
+          "aufnahme_entity": "Trigger (optional): switch/sensor - on = start, off = stop",
           "post_nach_minuten": "Status post after x minutes of recording",
           "post_abstand_sekunden": "Gap between cam posts in seconds",
           "schaukel_entity": "Swing cover (optional, position in the post)",
-          "werkzeug_basis_button": "Folder tool: 'go to base' button",
-          "werkzeug_wechseln_button": "Folder tool: 'enter folder' button",
-          "werkzeug_name_text": "Folder tool: 'new folder name' text",
-          "werkzeug_pfad_sensor": "Folder tool: 'current folder path' sensor",
-          "werkzeug_ordner_select": "Folder tool: sub folder select",
-          "werkzeug_status_sensor": "Folder tool: status sensor (optional)",
-          "werkzeug_timeout": "Folder tool: wait time in seconds"
+          "recorder_url": "Recorder: add-on address",
+          "recorder_schluessel": "Recorder: key (add-on api_key)"
         }
       }
     }
@@ -101,10 +87,13 @@
         "user": {
           "title": "New cam",
           "data": {
-            "name": "Name (as in OBS, e.g. Fuchsblick)",
+            "name": "Name (e.g. Fuchsblick)",
             "kuerzel": "Abbreviation (e.g. FB)",
             "kamera_entity": "Camera for snapshots (optional)",
-            "discord_posten": "Post to Discord"
+            "discord_posten": "Post to Discord",
+            "aufnehmen": "Recorder: record this cam",
+            "stream_entity": "Recorder: stream source via an HA camera",
+            "rtsp_url": "Recorder: or direct RTSP URL (takes priority)"
           }
         },
         "reconfigure": {
@@ -112,7 +101,10 @@
           "data": {
             "kuerzel": "Abbreviation",
             "kamera_entity": "Camera for snapshots (optional)",
-            "discord_posten": "Post to Discord"
+            "discord_posten": "Post to Discord",
+            "aufnehmen": "Recorder: record this cam",
+            "stream_entity": "Recorder: stream source via an HA camera",
+            "rtsp_url": "Recorder: or direct RTSP URL (takes priority)"
           }
         }
       },
@@ -144,6 +136,9 @@
       },
       "cam_dateiformat": {
         "name": "File format"
+      },
+      "recorder_frei": {
+        "name": "Recorder free space"
       }
     },
     "number": {
@@ -160,13 +155,30 @@
     "button": {
       "vorbereiten": {
         "name": "Prepare recording"
+      },
+      "recorder_starten": {
+        "name": "Start recorder"
+      },
+      "recorder_stoppen": {
+        "name": "Stop recorder"
+      }
+    },
+    "binary_sensor": {
+      "recorder_online": {
+        "name": "Recorder online"
+      },
+      "recorder_aufnahme": {
+        "name": "Recorder recording"
+      },
+      "cam_aufnahme": {
+        "name": "Recording"
       }
     }
   },
   "services": {
     "aufnahme_vorbereiten": {
       "name": "Prepare recording",
-      "description": "Creates folders, checks for a new season, sets path and file names in OBS and creates the Discord thread if needed.",
+      "description": "Creates folders via the recorder, checks for a new season and creates the Discord thread if needed.",
       "fields": {
         "spielpartner": {
           "name": "Player",
@@ -174,19 +186,9 @@
         }
       }
     },
-    "dateiformat_anwenden": {
-      "name": "Apply file format to OBS",
-      "description": "Writes the file names (with cam abbreviation) to all matching OBS filters again.",
-      "fields": {
-        "spielpartner": {
-          "name": "Player",
-          "description": "Player (identifier or display name) - empty = active"
-        }
-      }
-    },
     "aufnahme_zaehlen": {
       "name": "Count recording",
-      "description": "Adds one to 'recordings in season' and 'total' (normally automatic at the end of a recording).",
+      "description": "Increments the counters by one (normally automatic when the recorder stops).",
       "fields": {
         "spielpartner": {
           "name": "Player",
@@ -225,6 +227,21 @@
           "description": "New value"
         }
       }
+    },
+    "recorder_starten": {
+      "name": "Start recorder",
+      "description": "Starts recording all cams via the add-on.",
+      "fields": {
+        "spielpartner": {
+          "name": "Spielpartner",
+          "description": "empty = active"
+        }
+      }
+    },
+    "recorder_stoppen": {
+      "name": "Stop recorder",
+      "description": "Stops the recording cleanly and counts it.",
+      "fields": {}
     }
   }
 }

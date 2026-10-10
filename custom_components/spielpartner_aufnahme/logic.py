@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from datetime import datetime
 
 from .const import NO_SUBFOLDERS
 
@@ -58,14 +59,6 @@ def is_new_day(existing: Iterable[str] | None, todays_folder: str) -> bool:
     return has_folders and todays_folder not in options
 
 
-def join_unix(base: str, *parts: str) -> str:
-    return "/".join([base.rstrip("/\\"), *parts])
-
-
-def join_win(base: str, *parts: str) -> str:
-    return "\\".join([base.rstrip("/\\"), *parts])
-
-
 def file_format(nr: int, saison: int, aufnahme: int, cam: str, gesamt: int, suffix: str = "") -> str:
     """#01.02.03.FB.04 (+ Endung)."""
     return f"#{pad(nr)}.{pad(saison)}.{pad(aufnahme)}.{cam}.{pad(gesamt)}{suffix}"
@@ -84,17 +77,6 @@ def unpack_thread(raw: str | None) -> tuple[str, str]:
     return "", ""
 
 
-def match_filters(cam_name: str, filters: Iterable[tuple[str, str]]) -> list[str]:
-    """Filter-Entities finden, deren Quelle/Entity-ID den Cam-Namen enthaelt.
-
-    filters: (entity_id, source) Paare.
-    """
-    key = norm(cam_name)
-    if not key:
-        return []
-    return [eid for eid, source in filters if key in norm(f"{source} {eid}")]
-
-
 def build_post_header(minutes: int, swing: object) -> str:
     swing_txt = f"{swing}%" if swing not in (None, "", "unknown", "unavailable") else "unbekannt"
     return f"Aufnahme laeuft seit {minutes} Minuten.\n\nSchaukel Position: {swing_txt}"
@@ -103,3 +85,21 @@ def build_post_header(minutes: int, swing: object) -> str:
 def build_cam_caption(cam_name: str, video_id: str) -> str:
     """Zeile unter dem Schnappschuss der Cam."""
     return f"**{cam_name}**: `{video_id}`"
+
+
+_TOKENS = (
+    ("%CCYY", "%Y"),
+    ("%YY", "%y"),
+    ("%MM", "%m"),
+    ("%DD", "%d"),
+    ("%hh", "%H"),
+    ("%mm", "%M"),
+    ("%ss", "%S"),
+)
+
+
+def render_tokens(text: str, when: datetime) -> str:
+    """Datums-Platzhalter (%DD.%MM.%CCYY ...) in echte Werte umsetzen."""
+    for token, fmt in _TOKENS:
+        text = text.replace(token, when.strftime(fmt))
+    return text

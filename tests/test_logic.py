@@ -1,11 +1,15 @@
 from custom_components.spielpartner_aufnahme import logic
 
 
-def test_norm_and_match():
+def test_norm():
     assert logic.norm("Hölenblick") == "hoelenblick"
-    assert logic.match_filters(
-        "Hoelenblick", [("switch.a_hoelenblick_x", "Quelle Hoelenblick Hauptstream"), ("switch.b_fuchsblick", "Fuchsblick")]
-    ) == ["switch.a_hoelenblick_x"]
+
+
+def test_render_tokens():
+    from datetime import datetime
+
+    when = datetime(2026, 10, 9, 8, 7, 6)
+    assert logic.render_tokens("x %DD.%MM.%CCYY %hh:%mm:%ss", when) == "x 09.10.2026 08:07:06"
 
 
 def test_names_and_format():
@@ -26,8 +30,6 @@ def test_new_day():
 
 
 def test_paths_and_thread():
-    assert logic.join_unix("X:/a/", "b", "c") == "X:/a/b/c"
-    assert logic.join_win("X:\\a", "b") == "X:\\a\\b"
     assert logic.unpack_thread("123|02") == ("123", "02")
     assert logic.unpack_thread("unknown") == ("", "")
     assert logic.pack_thread("9", 3) == "9|03"

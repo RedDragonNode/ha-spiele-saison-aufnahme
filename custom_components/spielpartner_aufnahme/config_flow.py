@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -20,12 +19,13 @@ from homeassistant.helpers import selector
 from . import logic
 from .const import (
     CONF_ANZEIGE,
-    CONF_BASE_UNIX,
-    CONF_BASE_WIN,
     CONF_CAM_CAMERA,
-    CONF_CAM_POST,
     CONF_CAM_KUERZEL,
     CONF_CAM_NAME,
+    CONF_CAM_POST,
+    CONF_CAM_RECORD,
+    CONF_CAM_RTSP,
+    CONF_CAM_STREAM,
     CONF_DISCORD_TOKEN,
     CONF_FOLDER_PREFIX,
     CONF_FORMAT_SUFFIX,
@@ -38,15 +38,10 @@ from .const import (
     CONF_ORDNER_NR,
     CONF_POST_DELAY,
     CONF_POST_GAP,
+    CONF_RECORDER_KEY,
+    CONF_RECORDER_URL,
     CONF_RECORDING_ENTITY,
     CONF_SWING_ENTITY,
-    CONF_TOOL_BASE_BTN,
-    CONF_TOOL_ENTER_BTN,
-    CONF_TOOL_FOLDER_SELECT,
-    CONF_TOOL_NAME_TEXT,
-    CONF_TOOL_PATH_SENSOR,
-    CONF_TOOL_STATUS_SENSOR,
-    CONF_TOOL_TIMEOUT,
     DEFAULT_CAMERAS,
     DEFAULT_CAMS,
     DEFAULT_OPTIONS,
@@ -81,32 +76,33 @@ def _suggest(schema: vol.Schema, values: dict[str, Any]) -> vol.Schema:
 
 SETTINGS_SCHEMA = vol.Schema(
     {
+        vol.Required(CONF_RECORDER_URL): _TEXT,
+        vol.Required(CONF_RECORDER_KEY): _SECRET,
         vol.Optional(CONF_DISCORD_TOKEN): _SECRET,
-        vol.Required(CONF_BASE_UNIX): _TEXT,
-        vol.Required(CONF_BASE_WIN): _TEXT,
         vol.Required(CONF_FOLDER_PREFIX): _TEXT,
         vol.Optional(CONF_FORMAT_SUFFIX): _TEXT,
-        vol.Required(CONF_RECORDING_ENTITY): _ent("binary_sensor", "switch"),
+        vol.Optional(CONF_RECORDING_ENTITY): _ent("binary_sensor", "switch", "input_boolean"),
         vol.Required(CONF_POST_DELAY): _num(1, 120),
         vol.Optional(CONF_POST_GAP): _num(0, 300),
         vol.Optional(CONF_SWING_ENTITY): _ent("cover"),
-        vol.Optional(CONF_TOOL_BASE_BTN): _ent("button"),
-        vol.Optional(CONF_TOOL_ENTER_BTN): _ent("button"),
-        vol.Optional(CONF_TOOL_NAME_TEXT): _ent("text"),
-        vol.Optional(CONF_TOOL_PATH_SENSOR): _ent("sensor"),
-        vol.Optional(CONF_TOOL_FOLDER_SELECT): _ent("select"),
-        vol.Optional(CONF_TOOL_STATUS_SENSOR): _ent("sensor"),
-        vol.Optional(CONF_TOOL_TIMEOUT): _num(3, 120),
     }
 )
 
 
 def _clean(user_input: dict[str, Any]) -> dict[str, Any]:
     out = {k: v for k, v in user_input.items() if v not in (None, "")}
-    for key in (CONF_POST_DELAY, CONF_POST_GAP, CONF_TOOL_TIMEOUT):
+    for key in (CONF_POST_DELAY, CONF_POST_GAP):
         if key in out:
             out[key] = int(out[key])
     return out
+
+
+def _recorder_fields(user_input: dict[str, Any]) -> dict[str, Any]:
+    return {
+        CONF_CAM_RECORD: bool(user_input.get(CONF_CAM_RECORD, True)),
+        CONF_CAM_STREAM: user_input.get(CONF_CAM_STREAM, "") or "",
+        CONF_CAM_RTSP: (user_input.get(CONF_CAM_RTSP, "") or "").strip(),
+    }
 
 
 def _default_subentries() -> list[ConfigSubentryData]:
@@ -120,6 +116,9 @@ def _default_subentries() -> list[ConfigSubentryData]:
                 CONF_CAM_KUERZEL: kuerzel,
                 CONF_CAM_CAMERA: DEFAULT_CAMERAS.get(name, ""),
                 CONF_CAM_POST: name in DEFAULT_CAMERAS,
+                CONF_CAM_RECORD: True,
+                CONF_CAM_STREAM: "",
+                CONF_CAM_RTSP: "",
             },
         )
         for name, kuerzel in DEFAULT_CAMS.items()
@@ -241,6 +240,9 @@ class CamSubentryFlow(ConfigSubentryFlow):
         fields[vol.Required(CONF_CAM_KUERZEL)] = _TEXT
         fields[vol.Optional(CONF_CAM_POST, default=post_default)] = selector.BooleanSelector()
         fields[vol.Optional(CONF_CAM_CAMERA)] = _ent("camera")
+        fields[vol.Optional(CONF_CAM_RECORD, default=True)] = selector.BooleanSelector()
+        fields[vol.Optional(CONF_CAM_STREAM)] = _ent("camera")
+        fields[vol.Optional(CONF_CAM_RTSP)] = _SECRET
         return vol.Schema(fields)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
@@ -262,6 +264,7 @@ class CamSubentryFlow(ConfigSubentryFlow):
                     CONF_CAM_KUERZEL: user_input[CONF_CAM_KUERZEL].strip(),
                     CONF_CAM_CAMERA: user_input.get(CONF_CAM_CAMERA, "") or "",
                     CONF_CAM_POST: bool(user_input.get(CONF_CAM_POST, False)),
+                    **_recorder_fields(user_input),
                 }
                 return self.async_create_entry(title=name, data=data, unique_id=logic.norm(name))
         return self.async_show_form(
@@ -281,6 +284,7 @@ class CamSubentryFlow(ConfigSubentryFlow):
                         CONF_CAM_KUERZEL: user_input[CONF_CAM_KUERZEL].strip(),
                         CONF_CAM_CAMERA: user_input.get(CONF_CAM_CAMERA, "") or "",
                         CONF_CAM_POST: bool(user_input.get(CONF_CAM_POST, False)),
+                        **_recorder_fields(user_input),
                     }
                 )
                 return self.async_update_and_abort(self._get_entry(), sub, data=data)

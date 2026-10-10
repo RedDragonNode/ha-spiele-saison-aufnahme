@@ -1,14 +1,15 @@
+recorder_starten:
+  fields:
+    spielpartner:
+      required: false
+      example: frank_visselff
+      selector:
+        text:
+recorder_stoppen:
 aufnahme_vorbereiten:
   fields:
     spielpartner:
       required: true
-      example: frank_visselff
-      selector:
-        text:
-dateiformat_anwenden:
-  fields:
-    spielpartner:
-      required: false
       example: frank_visselff
       selector:
         text:

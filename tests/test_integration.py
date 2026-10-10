@@ -1,162 +1,273 @@
-"""Tests mit echter Home-Assistant-Testumgebung."""
+"""Integration + Recorder-Add-on (Add-on ist durch einen Fake ersetzt)."""
 from unittest.mock import AsyncMock, patch
 
-from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed  # noqa: F401
+import pytest
+from homeassistant.config_entries import ConfigSubentryData
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.spielpartner_aufnahme.const import DOMAIN, SUBENTRY_CAM, SUBENTRY_PARTNER
 from custom_components.spielpartner_aufnahme.config_flow import _default_subentries
+from custom_components.spielpartner_aufnahme.const import (
+    DOMAIN,
+    SUBENTRY_CAM,
+    SUBENTRY_PARTNER,
+)
+from custom_components.spielpartner_aufnahme.recorder_client import RecorderError
 
-BASE_WIN = "X:\\#2.0 Meine Videos OBS aufnahmen"
-OPTIONS = {
-    "discord_token": "tok",
-    "basis_pfad_obs": "X:/#2.0 Meine Videos OBS aufnahmen",
-    "basis_pfad_windows": BASE_WIN,
+BASE = {
     "ordner_praefix": "Spielen mit",
     "dateiformat_endung": " (4K) %DD.%MM.%CCYY",
     "aufnahme_entity": "binary_sensor.rec",
+    "recorder_url": "http://addon:8099",
+    "recorder_schluessel": "geheimgeheim123",
     "post_nach_minuten": 5,
-    "werkzeug_timeout": 3,
 }
 
 
-async def _entry(hass: HomeAssistant, options=None) -> MockConfigEntry:
-    from homeassistant.config_entries import ConfigSubentryData
+class FakeRecorder:
+    """Ersatz fuer RecorderClient."""
 
+    dirs: dict[str, list[str]] = {}
+    running = False
+    calls: list = []
+    fail = False
+    stop_reason = ""
+
+    def __init__(self, *_a, **_k):
+        pass
+
+    def _chk(self):
+        if FakeRecorder.fail:
+            raise RecorderError("Recorder-Add-on nicht erreichbar (test)")
+
+    async def status(self):
+        self._chk()
+        return {
+            "aufnahme": FakeRecorder.running,
+            "stop_grund": FakeRecorder.stop_reason,
+            "wurzel": "/media/aufnahmen",
+            "speicher": {"frei_gb": 2500.0, "gesamt_gb": 3000.0},
+            "version": "0.2.0",
+            "kameras": {},
+        }
+
+    async def list_dirs(self, path):
+        self._chk()
+        return FakeRecorder.dirs.get("/".join(path), [])
+
+    async def make_dirs(self, path):
+        self._chk()
+        FakeRecorder.dirs.setdefault("/".join(path[:-1]), [])
+        if len(path) > 1 and path[-1] not in FakeRecorder.dirs["/".join(path[:-1])]:
+            FakeRecorder.dirs["/".join(path[:-1])].append(path[-1])
+        return "/".join(path)
+
+    async def start(self, path, cams, session):
+        self._chk()
+        FakeRecorder.calls.append(("start", path, cams, session))
+        FakeRecorder.running = True
+        return {}
+
+    async def stop(self):
+        self._chk()
+        FakeRecorder.calls.append(("stop",))
+        FakeRecorder.running = False
+        return {}
+
+
+@pytest.fixture(autouse=True)
+def fake_recorder():
+    FakeRecorder.dirs, FakeRecorder.running, FakeRecorder.calls = {}, False, []
+    FakeRecorder.fail, FakeRecorder.stop_reason = False, ""
+    with patch("custom_components.spielpartner_aufnahme.manager.RecorderClient", FakeRecorder):
+        yield
+
+
+async def _setup(hass: HomeAssistant, **extra) -> MockConfigEntry:
     subs = _default_subentries()
+    for sub in subs:
+        if sub["data"]["name"] == "Fuchsblick":
+            sub["data"]["rtsp_url"] = "rtsp://u:p@192.168.1.11:554/main"
+        elif sub["data"]["name"] == "Kesselcam":
+            sub["data"]["stream_entity"] = "camera.kessel"
+        elif sub["data"]["name"] == "Rotpelz":
+            sub["data"]["aufnehmen"] = False
+            sub["data"]["rtsp_url"] = "rtsp://x/y"
     subs.append(
         ConfigSubentryData(
             subentry_type=SUBENTRY_PARTNER,
             title="Frank",
             unique_id="frank_visselff",
-            data={
-                "kennung": "frank_visselff",
-                "anzeige": "Frank",
-                "ordner_nr": 1,
-                "forum_id": "555",
-                "initial": {"saison": 2, "aufnahmen": 3, "gesamt": 14, "thread_id": "99", "thread_saison": "01"},
-            },
+            data={"kennung": "frank_visselff", "anzeige": "Frank", "ordner_nr": 1, "forum_id": "",
+                  "initial": {"saison": 2, "aufnahmen": 3, "gesamt": 14}},
         )
     )
-    entry = MockConfigEntry(domain=DOMAIN, data={}, options=options or OPTIONS, subentries_data=subs, unique_id=DOMAIN)
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options={**BASE, **extra}, subentries_data=subs, unique_id=DOMAIN)
     entry.add_to_hass(hass)
-    return entry
-
-
-def _obs(hass):
-    calls = []
-
-    async def set_settings(call: ServiceCall):
-        calls.append((call.data["entity_id"], call.data["settings"]))
-
-    hass.services.async_register("obs_stream_monitor", "set_settings", set_settings)
-    for eid, src in (
-        ("switch.obs_filter_fuchsblick", "Quelle Fuchsblick Hauptstream"),
-        ("switch.obs_filter_hoelenblick", "Quelle Hoelenblick Hauptstream"),
-        ("switch.obs_filter_kesselcam", "Quelle Kesselcam"),
-        ("switch.obs_filter_unbekannt", "Fremde Quelle"),
-    ):
-        hass.states.async_set(eid, "on" if "fuchs" in eid else "off", {"filter_kind": "source_record_filter", "source": src})
-    return calls
-
-
-async def test_setup_and_entities(hass: HomeAssistant) -> None:
-    entry = await _entry(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    reg = er.async_get(hass)
-    ids = {e.unique_id for e in er.async_entries_for_config_entry(reg, entry.entry_id)}
-    for key in ("saison", "aufnahmen_in_saison", "gesamt", "vorbereiten", "dateiformat", "speicher_adresse"):
-        assert f"{entry.entry_id}_frank_visselff_{key}" in ids
-    assert sum(1 for i in ids if i.endswith("_format")) == 16  # eine pro Cam
-    states = {s.entity_id: s.state for s in hass.states.async_all() if s.entity_id.startswith(("number.", "sensor."))}
-    assert any(v in ("2", "2.0") for v in states.values())  # Saison aus Startwerten
-    m = entry.runtime_data
-    assert m.format_for("frank_visselff", None) == "#01.02.03.Cam ID.14 (4K) %DD.%MM.%CCYY"
-
-
-async def test_prepare_without_folder_tool(hass: HomeAssistant) -> None:
-    entry = await _entry(hass)
-    calls = _obs(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    m = entry.runtime_data
-    with patch("custom_components.spielpartner_aufnahme.manager.DiscordClient") as dc:
-        dc.return_value.create_forum_thread = AsyncMock(return_value="777")
-        result = await hass.services.async_call(
-            DOMAIN, "aufnahme_vorbereiten", {"spielpartner": "frank_visselff"}, blocking=True, return_response=True
-        )
-    assert result["spielpartner"] == "frank_visselff"
-    assert result["obs_pfad_gesetzt"] == 4
-    assert result["obs_format_gesetzt"] == 3
-    paths = [s for e, s in calls if "path" in s]
-    assert all(s["path"].startswith("X:/#2.0 Meine Videos OBS aufnahmen/Spielen mit Frank #01/Saison 02 vom ") for s in paths)
-    fmts = {e: s["filename_formatting"] for e, s in calls if "filename_formatting" in s}
-    assert fmts["switch.obs_filter_fuchsblick"] == "#01.02.03.FB.14 (4K) %DD.%MM.%CCYY"
-    assert fmts["switch.obs_filter_kesselcam"].startswith("#01.02.03.KC.14")
-    assert any("Filter ohne Cam-Kuerzel" in h and "unbekannt" in h for h in result["hinweise"])
-    assert hass.states.get("sensor.spielpartner_aufnahme_current_player").state == "frank_visselff"
-
-
-async def test_prepare_with_folder_tool_new_season(hass: HomeAssistant) -> None:
-    entry = await _entry(hass)
-    _obs(hass)
-    tool = {"name": "", "path": BASE_WIN}
-    ids = dict(
-        base="button.spielzimmer_pc_ordner_werkzeug_zur_basis_wechseln",
-        enter="button.spielzimmer_pc_ordner_werkzeug_in_ordner_wechseln",
-        name="text.spielzimmer_pc_ordner_werkzeug_neuer_ordner_name",
-        path="sensor.spielzimmer_pc_ordner_werkzeug_aktueller_ordner_adresse",
-        sel="select.spielzimmer_pc_ordner_werkzeug_ordner_auswaehlen_wechseln",
-    )
-    hass.states.async_set(ids["path"], "irgendwo")
-    hass.states.async_set(ids["base"], "unknown")
-    hass.states.async_set(ids["enter"], "unknown")
-    hass.states.async_set(ids["name"], "")
-    hass.states.async_set(ids["sel"], "x", {"options": ["Saison 02 vom 01,01,2026"]})
-
-    async def set_text(call):
-        tool["name"] = call.data["value"]
-
-    async def press(call):
-        if call.data["entity_id"] == ids["base"]:
-            hass.states.async_set(ids["path"], BASE_WIN)
-        else:
-            hass.states.async_set(ids["path"], hass.states.get(ids["path"]).state + "\\" + tool["name"])
-
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    hass.services.async_register("text", "set_value", set_text)
-    hass.services.async_register("button", "press", press)
-    m = entry.runtime_data
-    with patch("custom_components.spielpartner_aufnahme.manager.DiscordClient") as dc:
-        dc.return_value.create_forum_thread = AsyncMock(return_value="777")
-        result = await m.async_prepare("frank_visselff")
-    assert result["neue_saison"] is True
-    assert result["saison"] == 3 and result["aufnahme_in_saison"] == 1 and result["gesamt"] == 14
-    assert "neuer Thread" in result["discord"]
-    assert m.state_of("frank_visselff")["thread_id"] == "777"
-    assert m.state_of("frank_visselff")["thread_saison"] == "03"
-    assert not [h for h in result["hinweise"] if "Zeitueberschreitung" in h]
-    # zweiter Lauf am selben Tag: gleiche Saison (Ordner existiert jetzt)
-    from homeassistant.util import dt as dt_util
-
-    heute = dt_util.now().strftime("%d,%m,%Y")
-    hass.states.async_set(ids["sel"], "x", {"options": [f"Saison 03 vom {heute}"]})
-    result = await m.async_prepare("frank_visselff")
-    assert result["neue_saison"] is False and result["saison"] == 3
-
-
-async def test_recording_cycle_counts_and_posts(hass: HomeAssistant) -> None:
-    options = {**OPTIONS, "post_abstand_sekunden": 0}
-    entry = await _entry(hass, options)
-    calls = _obs(hass)
     hass.states.async_set("binary_sensor.rec", "off")
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+    return entry
+
+
+def _stream_patch():
+    return patch(
+        "custom_components.spielpartner_aufnahme.manager.async_get_stream_source",
+        AsyncMock(return_value="rtsp://k:k@192.168.1.12/stream"),
+    )
+
+
+async def test_prepare_creates_folders(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    m = entry.runtime_data
+    r = await m.async_prepare("frank_visselff")
+    heute = dt_util.now().strftime("%d,%m,%Y")
+    assert FakeRecorder.dirs["Spielen mit Frank #01"] == [f"Saison 02 vom {heute}"]
+    assert r["ordner"] == f"/media/aufnahmen/Spielen mit Frank #01/Saison 02 vom {heute}"
+    assert m.state_of("frank_visselff")["rec_rel"] == ["Spielen mit Frank #01", f"Saison 02 vom {heute}"]
+    assert not r["hinweise"]
+
+
+async def test_new_season_detected_via_recorder(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    FakeRecorder.dirs["Spielen mit Frank #01"] = ["Saison 02 vom 01,01,2026"]
+    r = await entry.runtime_data.async_prepare("frank_visselff")
+    assert r["neue_saison"] and r["saison"] == 3 and r["aufnahme_in_saison"] == 1
+    r = await entry.runtime_data.async_prepare("frank_visselff")  # selber Tag: Ordner existiert jetzt
+    assert not r["neue_saison"] and r["saison"] == 3
+
+
+async def test_start_stop_service_counts_once_and_names_files(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    m = entry.runtime_data
+    await m.async_prepare("frank_visselff")
+    with _stream_patch():
+        res = await hass.services.async_call(DOMAIN, "recorder_starten", {}, blocking=True, return_response=True)
+    assert res["gestartet"] and set(res["cams"]) == {"Fuchsblick", "Kesselcam"}
+    assert "Rotpelz" not in res["cams"] and "Bauleitung" in res["ohne_stream"]
+    _, rel, cams, session = FakeRecorder.calls[0]
+    heute = dt_util.now()
+    stem = next(c["stem"] for c in cams if c["name"] == "Fuchsblick")
+    assert stem == f"#01.02.03.FB.14 (4K) {heute:%d.%m.%Y}" and "%" not in stem
+    assert next(c["url"] for c in cams if c["name"] == "Fuchsblick") == "rtsp://u:p@192.168.1.11:554/main"
+    assert next(c["url"] for c in cams if c["name"] == "Kesselcam").startswith("rtsp://k:k@")
+    assert session == "#01.02.03 Sitzung"
+    assert hass.states.get("binary_sensor.spielpartner_aufnahme_recorder_recording").state == "on"
+    again = await m.async_recorder_start()
+    assert again["gestartet"] is False  # idempotent
+    await hass.services.async_call(DOMAIN, "recorder_stoppen", {}, blocking=True)
+    s = m.state_of("frank_visselff")
+    assert (s["aufnahmen"], s["gesamt"]) == (4, 15)
+    await m.async_recorder_stop()  # zweites Stoppen zaehlt nicht nochmal
+    assert (s["aufnahmen"], s["gesamt"]) == (4, 15)
+    assert hass.states.get("binary_sensor.spielpartner_aufnahme_recorder_recording").state == "off"
+
+
+async def test_start_requires_active_partner_and_prepare(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    m = entry.runtime_data
+    with pytest.raises(ServiceValidationError):  # kein aktiver Partner
+        await m.async_recorder_start()
+    m.data["active"] = "frank_visselff"
+    with pytest.raises(ServiceValidationError):  # nie vorbereitet -> kein Recorder-Ordner
+        await m.async_recorder_start()
+
+
+async def test_unreachable_addon_does_not_mark_running(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    m = entry.runtime_data
+    await m.async_prepare("frank_visselff")
+    FakeRecorder.fail = True
+    with _stream_patch(), pytest.raises(RecorderError):
+        await m.async_recorder_start()
+    assert not m.recorder_running
+    assert m._rec_active is False
+
+
+async def test_trigger_entity_starts_and_stops(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    m = entry.runtime_data
+    await m.async_prepare("frank_visselff")
+    with _stream_patch():
+        hass.states.async_set("binary_sensor.rec", "on")
+        await hass.async_block_till_done()
+    assert FakeRecorder.running
+    hass.states.async_set("binary_sensor.rec", "off")
+    await hass.async_block_till_done()
+    assert not FakeRecorder.running
+    assert m.state_of("frank_visselff")["gesamt"] == 15
+
+
+async def test_no_trigger_entity_means_no_auto_start(hass: HomeAssistant) -> None:
+    entry = await _setup(hass, aufnahme_entity="")
+    await entry.runtime_data.async_prepare("frank_visselff")
+    hass.states.async_set("binary_sensor.rec", "on")
+    await hass.async_block_till_done()
+    assert not FakeRecorder.running
+
+
+async def test_lost_recording_is_counted_once_with_reason(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    m = entry.runtime_data
+    await m.async_prepare("frank_visselff")
+    with _stream_patch():
+        await m.async_recorder_start()
+    FakeRecorder.running, FakeRecorder.stop_reason = False, "speicher_voll"  # Add-on hat selbst beendet
+    await m._poll_recorder(None)
+    await m._poll_recorder(None)
+    assert not m.recorder_running
+    assert m.state_of("frank_visselff")["gesamt"] == 15
+    assert "speicher_voll" in m.data["status"]["text"]
+
+
+async def test_reattach_after_restart(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    m = entry.runtime_data
+    await m.async_prepare("frank_visselff")
+    with _stream_patch():
+        await m.async_recorder_start()
+    await m._store.async_save(m.data)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    m2 = entry.runtime_data
+    assert m2.recorder_running and m2._rec_active  # Aufnahme laeuft weiter, wieder verbunden
+    await m2.async_recorder_stop()
+    assert m2.state_of("frank_visselff")["gesamt"] == 15
+
+
+async def test_cam_subentry_recorder_fields(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    sid = next(i for i, s in entry.subentries.items() if s.subentry_type == SUBENTRY_CAM and s.data["name"] == "Kesselcam")
+    flow = await hass.config_entries.subentries.async_init((entry.entry_id, SUBENTRY_CAM), context={"source": "reconfigure", "subentry_id": sid})
+    assert flow["type"] == "form" and "rtsp_url" in {str(k) for k in flow["data_schema"].schema}
+    done = await hass.config_entries.subentries.async_configure(
+        flow["flow_id"], {"kuerzel": "KC", "rtsp_url": " rtsp://h/s ", "aufnehmen": True, "stream_entity": "camera.kessel"}
+    )
+    assert done["type"] == "abort"
+    assert entry.subentries[sid].data["rtsp_url"] == "rtsp://h/s"
+
+
+async def test_setup_and_entities(hass: HomeAssistant) -> None:
+    from homeassistant.helpers import entity_registry as er
+
+    entry = await _setup(hass)
+    ids = {e.unique_id for e in er.async_entries_for_config_entry(er.async_get(hass), entry.entry_id)}
+    for key in ("saison", "aufnahmen_in_saison", "gesamt", "vorbereiten", "dateiformat", "speicher_adresse"):
+        assert f"{entry.entry_id}_frank_visselff_{key}" in ids
+    assert sum(1 for i in ids if i.endswith("_format")) == 16
+    assert sum(1 for i in ids if i.endswith("_aufnahme")) == 17  # je Cam + Recorder
+    m = entry.runtime_data
+    assert m.format_for("frank_visselff", None) == "#01.02.03.Cam ID.14 (4K) %DD.%MM.%CCYY"
+    assert not hass.services.has_service(DOMAIN, "dateiformat_anwenden")
+
+
+async def test_discord_post_sequence(hass: HomeAssistant) -> None:
+    entry = await _setup(hass, post_abstand_sekunden=0)
     m = entry.runtime_data
     m.data["active"] = "frank_visselff"
+    m.state_of("frank_visselff")["thread_id"] = "99"
     posted = []
 
     class FakeImg:
@@ -172,30 +283,15 @@ async def test_recording_cycle_counts_and_posts(hass: HomeAssistant) -> None:
     ):
         r = await m.async_post_update()
         await m._post_task
-    # nur Fuchsblick und Hoelenblick sind standardmaessig zum Posten angehakt
     assert r["gepostet"] and r["cams"] == ["Fuchsblick", "Hoelenblick"]
-    assert all(p[0] == "99" for p in posted)
     assert posted[0][1].startswith("Aufnahme laeuft seit 5 Minuten.")
-    # je Cam: erst das Bild, direkt darunter die ID
     assert posted[1][1] == "" and posted[1][2][0][0].startswith("Fuchsblick_")
-    assert "Fuchsblick" in posted[2][1] and "#01.02.03.FB.14" in posted[2][1] and posted[2][2] is None
-    assert posted[3][2][0][0].startswith("Hoelenblick_")
-    assert "#01.02.03.HB.14" in posted[4][1]
+    assert "#01.02.03.FB.14" in posted[2][1] and "%" not in posted[2][1]
     assert len(posted) == 5
-    hass.states.async_set("binary_sensor.rec", "on")
-    await hass.async_block_till_done()
-    hass.states.async_set("binary_sensor.rec", "off")
-    await hass.async_block_till_done()
-    s = m.state_of("frank_visselff")
-    assert (s["aufnahmen"], s["gesamt"]) == (4, 15)
-    assert any(x[1].get("filename_formatting", "").startswith("#01.02.04.") for x in calls)
 
 
 async def test_set_counters_service_and_unload(hass: HomeAssistant) -> None:
-    entry = await _entry(hass)
-    _obs(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    entry = await _setup(hass)
     await hass.services.async_call(
         DOMAIN, "zaehler_setzen", {"spielpartner": "frank_visselff", "saison": 5, "gesamt": 100}, blocking=True
     )
@@ -209,66 +305,29 @@ async def test_config_flow_and_subentry_flow(hass: HomeAssistant) -> None:
     assert res["type"] == "form"
     res = await hass.config_entries.flow.async_configure(
         res["flow_id"],
-        {
-            "basis_pfad_obs": "X:/v",
-            "basis_pfad_windows": "X:\\v",
-            "ordner_praefix": "Spielen mit",
-            "aufnahme_entity": "binary_sensor.rec",
-            "post_nach_minuten": 5,
-        },
+        {"recorder_url": "http://addon:8099", "recorder_schluessel": "geheimgeheim123", "ordner_praefix": "Spielen mit", "post_nach_minuten": 5},
     )
     assert res["type"] == "create_entry"
     entry = res["result"]
     await hass.async_block_till_done()
     assert sum(1 for s in entry.subentries.values() if s.subentry_type == SUBENTRY_CAM) == 16
     flow = await hass.config_entries.subentries.async_init((entry.entry_id, SUBENTRY_PARTNER), context={"source": "user"})
-    assert flow["type"] == "form"
     bad = await hass.config_entries.subentries.async_configure(flow["flow_id"], {"kennung": "Gross Klein"})
     assert bad["errors"]["kennung"] == "invalid_kennung"
     done = await hass.config_entries.subentries.async_configure(
-        flow["flow_id"],
-        {"kennung": "neu_a", "anzeige": "Neu A", "ordner_nr": 7, "start_saison": 4, "start_gesamt": 21},
+        flow["flow_id"], {"kennung": "neu_a", "anzeige": "Neu A", "ordner_nr": 7, "start_saison": 4, "start_gesamt": 21}
     )
     assert done["type"] == "create_entry"
     await hass.async_block_till_done()
-    sub = next(s for s in entry.subentries.values() if s.subentry_type == SUBENTRY_PARTNER)
-    assert sub.data["anzeige"] == "Neu A" and sub.data["ordner_nr"] == 7
-    assert sub.data["initial"] == {"saison": 4, "gesamt": 21}
-    assert "alte_helfer_uebernehmen" not in sub.data
-    m = entry.runtime_data
-    assert m.state_of("neu_a")["saison"] == 4
+    assert entry.runtime_data.state_of("neu_a")["saison"] == 4
 
 
-async def test_options_flow_reloads(hass: HomeAssistant) -> None:
-    entry = await _entry(hass)
-    _obs(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+async def test_options_flow_reloads_and_drops_old_obs_options(hass: HomeAssistant) -> None:
+    entry = await _setup(hass, basis_pfad_obs="X:/alt", werkzeug_timeout=3, modus="obs")
     res = await hass.config_entries.options.async_init(entry.entry_id)
     assert res["type"] == "form"
-    new = {**OPTIONS, "post_nach_minuten": 9}
-    res = await hass.config_entries.options.async_configure(res["flow_id"], new)
+    res = await hass.config_entries.options.async_configure(res["flow_id"], {**BASE, "post_nach_minuten": 9})
     assert res["type"] == "create_entry"
     await hass.async_block_till_done()
     assert entry.options["post_nach_minuten"] == 9
-    assert entry.runtime_data.opt("post_nach_minuten") == 9
-
-
-async def test_cam_subentry_checkbox(hass: HomeAssistant) -> None:
-    entry = await _entry(hass)
-    _obs(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    sid, sub = next((i, s) for i, s in entry.subentries.items() if s.data.get("name") == "Kesselcam")
-    assert sub.data["discord_posten"] is False
-    flow = await hass.config_entries.subentries.async_init(
-        (entry.entry_id, SUBENTRY_CAM), context={"source": "reconfigure", "subentry_id": sid}
-    )
-    assert flow["type"] == "form" and "filter_entity" not in {str(k) for k in flow["data_schema"].schema}
-    res = await hass.config_entries.subentries.async_configure(
-        flow["flow_id"], {"kuerzel": "KC", "discord_posten": True, "kamera_entity": "camera.kessel"}
-    )
-    await hass.async_block_till_done()
-    assert res["type"] == "abort"
-    assert entry.subentries[sid].data["discord_posten"] is True
-    assert [c.name for c in entry.runtime_data.cams if c.post] == ["Fuchsblick", "Hoelenblick", "Kesselcam"]
+    assert "basis_pfad_obs" not in entry.options and "modus" not in entry.options

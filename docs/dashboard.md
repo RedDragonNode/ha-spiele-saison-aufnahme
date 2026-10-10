@@ -47,3 +47,16 @@ entities:
   - sensor.cam_hoelenblick_dateiformat
   - sensor.cam_kesselcam_dateiformat
 ```
+
+## Recorder
+
+```yaml
+type: entities
+title: Recorder
+entities:
+  - binary_sensor.spielpartner_aufnahme_recorder_erreichbar
+  - binary_sensor.spielpartner_aufnahme_recorder_nimmt_auf
+  - sensor.spielpartner_aufnahme_recorder_freier_speicher
+  - button.spielpartner_aufnahme_recorder_starten
+  - button.spielpartner_aufnahme_recorder_stoppen
+```
