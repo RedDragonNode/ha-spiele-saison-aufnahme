@@ -3,9 +3,14 @@ from __future__ import annotations
 
 DOMAIN = "spiel_saison_aufnehmen"
 
+# Cams, Aufnahme-Profile und die Recorder-Adresse verwaltet die Integration 'Cam Recorder Profile'
+HUB_DOMAIN = "cam_recorder_profile"
+HUB_SUBENTRY_CAM = "cam"
+HUB_SIGNAL = f"{HUB_DOMAIN}_loaded"  # wird dort nach jedem (Neu-)Laden gesendet
+
 SUBENTRY_PARTNER = "spielpartner"
-SUBENTRY_CAM = "cam"
-SUBENTRY_PROFILE = "profil"
+SUBENTRY_CAM = "cam"  # hier nur noch die Discord-Zusaetze einer Cam (Verweis auf die Cam im Hub)
+SUBENTRY_PROFILE = "profil"  # nur noch zum Aufraeumen alter Eintraege (bis 0.5.x)
 LEGACY_PROFILE = "default"  # Profil-ID des Spielpartner-Ablaufs im Recorder
 
 # --- Einstellungen (config_entry.options) -------------------------------------
@@ -25,8 +30,9 @@ DEFAULT_OPTIONS: dict[str, object] = {
     CONF_FORMAT_SUFFIX: " (4K) %DD.%MM.%CCYY",
     CONF_POST_DELAY: 5,
     CONF_POST_GAP: 20,
-    CONF_RECORDER_URL: "http://local-spielpartner-recorder:8099",
 }
+DEFAULT_RECORDER_URL = "http://local-cam-recorder:8099"
+OLD_RECORDER_URL = "http://local-spielpartner-recorder:8099"  # Adresse des frueheren Add-ons
 
 # --- Spielpartner (Subentry) ---------------------------------------------------
 CONF_KENNUNG = "kennung"
@@ -38,7 +44,8 @@ CONF_INIT_AUFNAHMEN = "start_aufnahmen_in_saison"
 CONF_INIT_GESAMT = "start_gesamt"
 CONF_INITIAL = "initial"  # intern: Startwerte, werden einmalig in den Speicher uebernommen
 
-# --- Cam (Subentry) ------------------------------------------------------------
+# --- Cam (Subentry: Discord-Zusaetze) / Cam im Hub -----------------------------
+CONF_CAM_ID = "cam_id"  # ID der Cam in Cam Recorder Profile
 CONF_CAM_NAME = "name"
 CONF_CAM_KUERZEL = "kuerzel"
 CONF_CAM_FILTER = "filter_entity"  # alt, wird nicht mehr genutzt
@@ -48,47 +55,7 @@ CONF_CAM_RECORD = "aufnehmen"  # Recorder: diese Cam aufnehmen
 CONF_CAM_STREAM = "stream_entity"  # Recorder: Stream-Quelle ueber eine HA-Kamera
 CONF_CAM_RTSP = "rtsp_url"  # Recorder: oder direkte RTSP-Adresse (hat Vorrang)
 
-# --- Aufnahme-Profil (Subentry) -------------------------------------------------
-CONF_PROF_NAME = "name"
-CONF_PROF_FOLDER = "ordner"  # gespeichert als "Haupt/Unter"
-CONF_PROF_MAIN = "hauptordner"  # nur im Formular
-CONF_PROF_SUB = "unterordner"  # nur im Formular
-CONF_PROF_CAMS = "cams"  # Liste von Cam-Subentry-IDs
-CONF_PROF_PATTERN = "dateimuster"
-CONF_PROF_TRIGGERS = "ausloeser"  # Liste von Entities (an = aufnehmen)
-CONF_PROF_AFTER = "nachlauf_sekunden"
-CONF_PROF_MAX = "max_dauer_minuten"
-CONF_PROF_FROM = "zeit_von"
-CONF_PROF_TO = "zeit_bis"
-CONF_PROF_SUN = "sonne"  # "", "tag", "nacht"
-DEFAULT_PATTERN = "{cam} %CCYY-%MM-%DD %hh-%mm-%ss"
-
 COUNTER_START = 1  # Startwert nach Saisonwechsel / fuer neue Spielpartner
-
-# Standard-Kuerzel (Stand: erste Version, aus der Cam-Uebersicht des Nutzers)
-DEFAULT_CAMS: dict[str, str] = {
-    "Bauleitung": "BL",
-    "Baumeister": "BM",
-    "Faehrtensucher": "FS",
-    "Fellnah": "FN",
-    "Fuchsblick": "FB",
-    "Hoelenblick": "HB",
-    "Kesselcam": "KC",
-    "Nachtstreife": "NS",
-    "Ohrenspitze": "OS",
-    "Pfotenabdruck": "PD",
-    "Rotpelz": "RP",
-    "Rudelblick": "RB",
-    "Schnauzencam": "sc",
-    "Schweifwedler": "SW",
-    "Unterbau": "UB",
-    "Wildspur": "WS",
-}
-# Cams mit eigener HA-Kamera-Entity fuer Schnappschuesse (wie im alten System)
-DEFAULT_CAMERAS: dict[str, str] = {
-    "Fuchsblick": "camera.fuchsblick_schnappschusse_in_hochauflosung",
-    "Hoelenblick": "camera.hoelenblick_schnappschusse_in_hochauflosung",
-}
 
 DISCORD_API = "https://discord.com/api/v10"
 DISCORD_COLOR_GREEN = 3066993
@@ -99,7 +66,5 @@ SERVICE_COUNT = "aufnahme_zaehlen"
 SERVICE_POST = "aufnahme_posten"
 SERVICE_REC_START = "recorder_starten"
 SERVICE_REC_STOP = "recorder_stoppen"
-SERVICE_PROFILE_START = "profil_starten"
-SERVICE_PROFILE_STOP = "profil_stoppen"
 
 NO_SUBFOLDERS = "(keine Unterordner)"

@@ -6,8 +6,8 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 
-from .const import DOMAIN
-from .manager import CamCfg, PartnerCfg, ProfileCfg, SpielpartnerManager
+from .const import DOMAIN, HUB_DOMAIN
+from .manager import CamCfg, PartnerCfg, SpielpartnerManager
 
 
 class SpielpartnerEntity(Entity):
@@ -39,18 +39,11 @@ def partner_device(manager: SpielpartnerManager, p: PartnerCfg) -> DeviceInfo:
 
 
 def cam_device(manager: SpielpartnerManager, c: CamCfg) -> DeviceInfo:
+    """Das Geraet der Cam gehoert 'Cam Recorder Profile'; hier haengen nur weitere Entities daran."""
+    hub = manager.hub_entry()
     return DeviceInfo(
-        identifiers={(DOMAIN, f"{manager.entry.entry_id}_c_{c.subentry_id}")},
+        identifiers={(HUB_DOMAIN, f"{hub.entry_id if hub else ''}_c_{c.subentry_id}")},
         name=f"Cam {c.name}",
         manufacturer="RedDragonNode",
         model="Cam",
-    )
-
-
-def profile_device(manager: SpielpartnerManager, p: ProfileCfg) -> DeviceInfo:
-    return DeviceInfo(
-        identifiers={(DOMAIN, f"{manager.entry.entry_id}_prof_{p.subentry_id}")},
-        name=f"Profil {p.name}",
-        manufacturer="RedDragonNode",
-        model="Aufnahme-Profil",
     )

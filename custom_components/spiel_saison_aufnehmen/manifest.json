@@ -1,13 +1,20 @@
 {
   "domain": "spiel_saison_aufnehmen",
   "name": "Spiel Saison aufnehmen",
-  "codeowners": ["@RedDragonNode"],
+  "codeowners": [
+    "@RedDragonNode"
+  ],
   "config_flow": true,
-  "documentation": "https://github.com/RedDragonNode/ha-spiel-saison-aufnehmen",
+  "dependencies": [
+    "cam_recorder_profile"
+  ],
+  "documentation": "https://github.com/RedDragonNode/ha-spiele-saison-aufnahme",
   "integration_type": "service",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/RedDragonNode/ha-spiel-saison-aufnehmen/issues",
+  "issue_tracker": "https://github.com/RedDragonNode/ha-spiele-saison-aufnahme/issues",
   "requirements": [],
-  "after_dependencies": ["camera"],
-  "version": "0.5.1"
+  "after_dependencies": [
+    "camera"
+  ],
+  "version": "0.6.0"
 }

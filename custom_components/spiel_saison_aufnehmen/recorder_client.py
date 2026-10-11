@@ -1,4 +1,4 @@
-"""Client fuer das Add-on 'Spielpartner Recorder'."""
+"""Client fuer das Recorder-Add-on 'Cam Recorder'."""
 from __future__ import annotations
 
 import asyncio

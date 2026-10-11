@@ -5,11 +5,13 @@
 # Spiel Saison aufnehmen
 
 > **Umbenannt in 0.5.0** (vorher *Spielpartner Aufnahme*, Domain `spielpartner_aufnahme`). Neue Domain `spiel_saison_aufnehmen`: alte Integration entfernen, neue hinzufügen; Zähler und Discord-Threads der alten Integration werden beim ersten Start automatisch übernommen. Entity-IDs ändern sich (`…spiel_saison_aufnehmen_…`), Dashboards/Automationen anpassen.
+>
+> **Neu in 0.6.0:** Cams, Aufnahme-Profile und das Recorder-Add-on gehören der Schwester-Integration
+> **[Cam Recorder Profile](https://github.com/RedDragonNode/ha-cam-recorder-profile)**. Diese Integration braucht sie
+> (Abhängigkeit) und kümmert sich nur noch um Spielpartner, Zähler, Dateinamen und Discord. Umzug siehe [docs/migration.md](docs/migration.md).
 
 Private Home-Assistant-Integration für **Spielen Spezial**: Spielpartner anlegen und pflegen, Aufnahmen
-vorbereiten, Zähler führen, Kameras **direkt vom RTSP-Stream aufnehmen** und Discord-Threads bedienen –
-alles an einem Ort. Seit 0.3.0 ohne OBS: Die Aufnahme läuft über das Add-on **Spielpartner Recorder**
-(ffmpeg Stream-Copy, keine Neukodierung, keine GPU-Last).
+vorbereiten, Zähler führen, die Cams über *Cam Recorder Profile* aufnehmen und Discord-Threads bedienen.
 
 > Privates Repo, MIT-Lizenz.
 
@@ -17,24 +19,25 @@ alles an einem Ort. Seit 0.3.0 ohne OBS: Die Aufnahme läuft über das Add-on **
 
 | Baustein | Aufgabe |
 |---|---|
-| Integration `spiel_saison_aufnehmen` | Spielpartner, Cams, Zähler, Dateinamen, Discord, Steuerung |
-| Add-on `addon/spielpartner_recorder` | schreibt die Streams per ffmpeg auf die Platte, überwacht und startet bei Abbruch neu |
+| Integration `spiel_saison_aufnehmen` (dieses Repo) | Spielpartner, Zähler, Dateinamen, Discord, Start/Stopp der Spielpartner-Aufnahme |
+| Integration `cam_recorder_profile` | Cams, Aufnahme-Profile (Zeitplan, Sonne, Bewegung), Adresse des Add-ons |
+| Add-on **Cam Recorder** (im Repo von `cam_recorder_profile`) | schreibt die Streams per ffmpeg auf die Platte, überwacht und startet bei Abbruch neu |
 
 ## Installation
 
-1. **Integration:** Ordner `spiel_saison_aufnehmen` aus dem Archiv nach `config/custom_components/` kopieren,
+1. **Zuerst** *Cam Recorder Profile* und das Add-on einrichten (siehe dortiges README).
+2. **Diese Integration:** Ordner `spiel_saison_aufnehmen` aus dem Archiv nach `config/custom_components/` kopieren,
    Home Assistant neu starten, dann *Einstellungen → Geräte & Dienste → Integration hinzufügen → „Spiel Saison aufnehmen“*.
-2. **Add-on und Speicher:** siehe [docs/recorder.md](docs/recorder.md).
+3. **Speicher:** siehe [docs/recorder.md](docs/recorder.md).
 
 ## Einrichtung
 
-1. **Grundeinstellungen:** Adresse und Schlüssel des Recorder-Add-ons, Ordner-Präfix, Dateiname-Endung,
-   Wartezeit für den Statusbeitrag, optional Discord-Bot-Token, Schaukel-Cover und ein **Auslöser**
-   (Schalter/Sensor: an = Recorder starten, aus = stoppen).
-2. Die **16 Standard-Cams** (Bauleitung … Wildspur) werden mit ihrem Kürzel angelegt. Nicht vorhandene Cams
-   über das Drei-Punkte-Menü löschen oder bei der Cam „Recorder: diese Cam aufnehmen“ abwählen.
-3. **Cams bearbeiten:** Stream-Quelle (HA-Kamera **oder** RTSP-Adresse), Kürzel, „In Discord posten“,
-   Kamera für Schnappschüsse.
+1. **Grundeinstellungen:** Ordner-Präfix, Dateiname-Endung, Wartezeit für den Statusbeitrag, optional Discord-Bot-Token,
+   Schaukel-Cover und ein **Auslöser** (Schalter/Sensor: an = Recorder starten, aus = stoppen).
+   Recorder-Adresse und -Schlüssel leer lassen = wie in *Cam Recorder Profile*.
+2. **Cams** legst du in *Cam Recorder Profile* an (Name, Kürzel, Stream-Quelle oder RTSP-Adresse). Alle diese Cams nehmen
+   bei der Spielpartner-Aufnahme mit auf (es sei denn dort „aufnehmen“ abgewählt ist).
+3. **Discord-Zusatz je Cam (optional):** *Discord-Cam hinzufügen* – Schnappschuss-Kamera und „In Discord posten“.
 4. **Spielpartner hinzufügen:** Kennung, Anzeigename, Ordner-Nummer (`#01`), Discord-Forum-Kanal-ID und Startwerte
    der Zähler (leer = 1).
 
@@ -63,7 +66,7 @@ Abbrüche einer Kamera erzeugen `… Teil 2.mp4`. Pro Sitzung liegt eine `.json`
 
 Pro Spielpartner (eigenes Gerät): Zähler **Saison**, **Aufnahmen in Saison**, **Aufnahmen gesamt**
 (editierbar), Sensoren **Speicher-Adresse**, **Dateiformat**, **Discord-Thread**, Button **Aufnahme vorbereiten**.
-Pro Cam: **Dateiformat** und **Aufnahme** (Status, Datei, Teil, Neustarts, Größe, letzter Fehler).
+Pro Cam: **Dateiformat** (am Cam-Gerät von *Cam Recorder Profile*; dort auch der Aufnahme-Status).
 Global: **Aktueller Spielpartner**, **Status**, **Recorder erreichbar**, **Recorder nimmt auf**,
 **Recorder: freier Speicher**, Buttons **Recorder starten/stoppen**.
 
@@ -96,8 +99,8 @@ pytest
 
 ## Weitere Doku
 
-- [Recorder: Add-on, SSD, Betrieb](docs/recorder.md)
-- [Migration vom alten System / von 0.2.x](docs/migration.md)
+- [Recorder: Speicher, Zusammenspiel mit Cam Recorder Profile](docs/recorder.md)
+- [Migration (0.6.0, 0.3.0, altes System)](docs/migration.md)
 - [Dashboard-Beispiel](docs/dashboard.md)
 
 ## Bekannte Eigenheiten

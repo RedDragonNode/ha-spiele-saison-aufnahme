@@ -1,31 +1,31 @@
-"""Spiel Saison aufnehmen: Spielpartner, Cams, Zaehler, Recorder und Discord an einem Ort."""
+"""Spiel Saison aufnehmen: Spielpartner, Zaehler und Discord; Cams und Recorder kommen aus Cam Recorder Profile."""
 from __future__ import annotations
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse, callback
+from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     DOMAIN,
+    HUB_DOMAIN,
+    HUB_SIGNAL,
     SERVICE_COUNT,
     SERVICE_POST,
     SERVICE_PREPARE,
-    SERVICE_PROFILE_START,
-    SERVICE_PROFILE_STOP,
     SERVICE_REC_START,
     SERVICE_REC_STOP,
     SERVICE_SET_COUNTERS,
-    SUBENTRY_CAM,
     SUBENTRY_PARTNER,
-    SUBENTRY_PROFILE,
 )
-from .entity import cam_device, partner_device, profile_device
+from .entity import partner_device
 from .manager import SpielpartnerManager
+from .migration import cleanup_registry, migrate, needs_migration
 
 PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.BUTTON, Platform.BINARY_SENSOR]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -65,16 +65,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def rec_stop(call: ServiceCall) -> dict:
         return await _manager(hass).async_recorder_stop()
 
-    async def prof_start(call: ServiceCall) -> dict:
-        return await _manager(hass).async_profile_start(call.data["profil"])
-
-    async def prof_stop(call: ServiceCall) -> dict:
-        return await _manager(hass).async_profile_stop(call.data["profil"])
-
-    for name, handler in ((SERVICE_PROFILE_START, prof_start), (SERVICE_PROFILE_STOP, prof_stop)):
-        hass.services.async_register(
-            DOMAIN, name, handler, vol.Schema({vol.Required("profil"): cv.string}), supports_response=SupportsResponse.OPTIONAL
-        )
     hass.services.async_register(
         DOMAIN, SERVICE_REC_START, rec_start, vol.Schema({_OPT_PARTNER: cv.string}), supports_response=SupportsResponse.OPTIONAL
     )
@@ -105,6 +95,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: SpielpartnerConfigEntry) -> bool:
+    hub_entry = next(iter(hass.config_entries.async_entries(HUB_DOMAIN)), None)
+    if hub_entry is None:
+        # Ohne Cam Recorder Profile gaebe es keine Cams; erst warten, nichts umbauen (nichts geht verloren)
+        raise ConfigEntryNotReady("Bitte zuerst die Integration 'Cam Recorder Profile' einrichten - dort liegen die Cams")
+    if needs_migration(entry):
+        migrate(hass, entry, hub_entry)
+    cleanup_registry(hass, entry)
     manager = SpielpartnerManager(hass, entry)
     await manager.async_load()
     entry.runtime_data = manager
@@ -122,11 +119,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SpielpartnerConfigEntry)
         if sub.subentry_type == SUBENTRY_PARTNER:
             p = manager.partners.get(sub.data.get("kennung", ""))
             info = partner_device(manager, p) if p else None
-        elif sub.subentry_type == SUBENTRY_CAM:
-            cam = next((c for c in manager.cams if c.subentry_id == sid), None)
-            info = cam_device(manager, cam) if cam else None
-        elif sub.subentry_type == SUBENTRY_PROFILE:
-            info = profile_device(manager, manager.profiles[sid]) if sid in manager.profiles else None
         else:
             info = None
         if info:
@@ -142,6 +134,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: SpielpartnerConfigEntry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     manager.async_start()
     entry.async_on_unload(entry.add_update_listener(_reload_on_change))
+
+    @callback
+    def _hub_changed() -> None:  # Cams in Cam Recorder Profile geaendert -> Cam-Liste neu einlesen
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+
+    entry.async_on_unload(async_dispatcher_connect(hass, HUB_SIGNAL, _hub_changed))
     return True
 
 

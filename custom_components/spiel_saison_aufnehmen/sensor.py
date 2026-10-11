@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import SpielpartnerConfigEntry
-from .const import SUBENTRY_CAM, SUBENTRY_PARTNER
+from .const import SUBENTRY_PARTNER
 from .entity import SpielpartnerEntity, cam_device, hub_device, partner_device
 from .manager import CamCfg, PartnerCfg, SpielpartnerManager
 
@@ -21,6 +21,7 @@ async def async_setup_entry(
 ) -> None:
     m = entry.runtime_data
     async_add_entities([ActivePartnerSensor(m), StatusSensor(m), RecorderSpaceSensor(m)])
+    async_add_entities([CamFormatSensor(m, cam) for cam in m.cams])
     for sid, sub in entry.subentries.items():
         if sub.subentry_type == SUBENTRY_PARTNER:
             if (p := m.partners.get(sub.data.get("kennung", ""))) is None:
@@ -28,9 +29,6 @@ async def async_setup_entry(
             async_add_entities(
                 [PathSensor(m, p), FormatSensor(m, p), ThreadSensor(m, p)], config_subentry_id=sid
             )
-        elif sub.subentry_type == SUBENTRY_CAM:
-            if (cam := next((c for c in m.cams if c.subentry_id == sid), None)) is not None:
-                async_add_entities([CamFormatSensor(m, cam)], config_subentry_id=sid)
 
 
 class ActivePartnerSensor(SpielpartnerEntity, SensorEntity):
@@ -135,7 +133,7 @@ class CamFormatSensor(SpielpartnerEntity, SensorEntity):
     def __init__(self, m: SpielpartnerManager, cam: CamCfg) -> None:
         super().__init__(m)
         self.cam = cam
-        self._attr_unique_id = f"{m.entry.entry_id}_cam_{cam.subentry_id}_format"
+        self._attr_unique_id = f"{m.entry.entry_id}_camfmt_{cam.subentry_id}"
         self._attr_device_info = cam_device(m, cam)
 
     @property

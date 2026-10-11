@@ -34,6 +34,7 @@ from . import logic
 from .const import (
     CONF_ANZEIGE,
     CONF_CAM_CAMERA,
+    CONF_CAM_ID,
     CONF_CAM_KUERZEL,
     CONF_CAM_NAME,
     CONF_CAM_POST,
@@ -49,16 +50,6 @@ from .const import (
     CONF_ORDNER_NR,
     CONF_POST_DELAY,
     CONF_POST_GAP,
-    CONF_PROF_AFTER,
-    CONF_PROF_CAMS,
-    CONF_PROF_FOLDER,
-    CONF_PROF_FROM,
-    CONF_PROF_MAX,
-    CONF_PROF_NAME,
-    CONF_PROF_PATTERN,
-    CONF_PROF_SUN,
-    CONF_PROF_TO,
-    CONF_PROF_TRIGGERS,
     CONF_RECORDER_KEY,
     CONF_RECORDER_URL,
     CONF_RECORDING_ENTITY,
@@ -66,12 +57,13 @@ from .const import (
     CONF_SWING_ENTITY,
     COUNTER_START,
     DEFAULT_OPTIONS,
-    DEFAULT_PATTERN,
+    DEFAULT_RECORDER_URL,
     DOMAIN,
+    HUB_DOMAIN,
+    HUB_SUBENTRY_CAM,
     LEGACY_PROFILE,
     SUBENTRY_CAM,
     SUBENTRY_PARTNER,
-    SUBENTRY_PROFILE,
 )
 from .discord_client import DiscordClient, DiscordError
 from .recorder_client import RecorderClient, RecorderError
@@ -106,35 +98,16 @@ class PartnerCfg:
 
 @dataclass
 class CamCfg:
+    """Eine Cam aus 'Cam Recorder Profile' (subentry_id = Cam-ID im Recorder) plus die Discord-Zusaetze von hier."""
+
     subentry_id: str
     name: str
     kuerzel: str
-    camera_entity: str
-    post: bool
+    camera_entity: str = ""
+    post: bool = False
     record: bool = True
     stream_entity: str = ""
     rtsp_url: str = ""
-
-
-@dataclass
-class ProfileCfg:
-    """Aufnahme-Profil: wohin, welche Cams, wann."""
-
-    subentry_id: str
-    name: str
-    folder: list[str]
-    cam_ids: list[str]
-    pattern: str = DEFAULT_PATTERN
-    triggers: list[str] = field(default_factory=list)
-    after_s: int = 0
-    max_min: int = 0
-    time_from: str = ""
-    time_to: str = ""
-    sun: str = ""
-
-    @property
-    def has_window(self) -> bool:
-        return bool((self.time_from and self.time_to) or self.sun)
 
 
 class SpielpartnerManager:
@@ -158,13 +131,13 @@ class SpielpartnerManager:
         self.rec_online: bool | None = None
         self.partners: dict[str, PartnerCfg] = {}
         self.cams: list[CamCfg] = []
-        self.profiles: dict[str, ProfileCfg] = {}
-        self.profile_state: dict[str, dict[str, Any]] = {}  # laufende Profile (Laufzeit)
-        self._prof_lock = asyncio.Lock()
-        self._capped: set[str] = set()
         self._read_subentries()
 
     # ------------------------------------------------------------------ Setup
+    def hub_entry(self) -> ConfigEntry | None:
+        """Der Eintrag von 'Cam Recorder Profile' (dort liegen Cams, Profile und die Recorder-Adresse)."""
+        return next(iter(self.hass.config_entries.async_entries(HUB_DOMAIN)), None)
+
     def _read_subentries(self) -> None:
         for sid, sub in self.entry.subentries.items():
             try:
@@ -178,49 +151,43 @@ class SpielpartnerManager:
                     sid,
                     err,
                 )
-        self.cams.sort(key=lambda c: logic.norm(c.name))
+        hub = self.hub_entry()
+        by_id: dict[str, CamCfg] = {}
+        for sid, sub in (hub.subentries if hub else {}).items():
+            d = sub.data
+            if sub.subentry_type != HUB_SUBENTRY_CAM or not d.get(CONF_CAM_NAME):
+                continue
+            by_id[sid] = CamCfg(
+                subentry_id=sid,
+                name=d[CONF_CAM_NAME],
+                kuerzel=d.get(CONF_CAM_KUERZEL) or d[CONF_CAM_NAME][:2].upper(),
+                record=bool(d.get(CONF_CAM_RECORD, True)),
+                stream_entity=d.get(CONF_CAM_STREAM, "") or "",
+                rtsp_url=d.get(CONF_CAM_RTSP, "") or "",
+            )
+        for sub in self.entry.subentries.values():  # Discord-Zusaetze je Cam
+            if sub.subentry_type != SUBENTRY_CAM:
+                continue
+            cam = by_id.get(sub.data.get(CONF_CAM_ID, ""))
+            if cam is None:
+                _LOGGER.warning("Discord-Eintrag '%s' gehoert zu keiner Cam in Cam Recorder Profile", sub.title)
+                continue
+            cam.camera_entity = sub.data.get(CONF_CAM_CAMERA, "") or ""
+            cam.post = bool(sub.data.get(CONF_CAM_POST, bool(cam.camera_entity)))
+        self.cams = sorted(by_id.values(), key=lambda c: logic.norm(c.name))
 
     def _read_subentry(self, sid: str, sub: Any) -> None:
         d = sub.data
-        if True:
-            if sub.subentry_type == SUBENTRY_PARTNER:
-                p = PartnerCfg(
-                    subentry_id=sid,
-                    kennung=d[CONF_KENNUNG],
-                    anzeige=d.get(CONF_ANZEIGE) or logic.default_anzeige(d[CONF_KENNUNG]),
-                    ordner_nr=int(d.get(CONF_ORDNER_NR, 1)),
-                    forum_id=str(d.get(CONF_FORUM_ID, "") or ""),
-                    initial=dict(d.get(CONF_INITIAL, {})),
-                )
-                self.partners[p.kennung] = p
-            elif sub.subentry_type == SUBENTRY_CAM:
-                camera = d.get(CONF_CAM_CAMERA, "") or ""
-                self.cams.append(
-                    CamCfg(
-                        subentry_id=sid,
-                        name=d[CONF_CAM_NAME],
-                        kuerzel=d[CONF_CAM_KUERZEL],
-                        camera_entity=camera,
-                        post=bool(d.get(CONF_CAM_POST, bool(camera))),
-                        record=bool(d.get(CONF_CAM_RECORD, True)),
-                        stream_entity=d.get(CONF_CAM_STREAM, "") or "",
-                        rtsp_url=d.get(CONF_CAM_RTSP, "") or "",
-                    )
-                )
-            elif sub.subentry_type == SUBENTRY_PROFILE:
-                self.profiles[sid] = ProfileCfg(
-                    subentry_id=sid,
-                    name=d[CONF_PROF_NAME],
-                    folder=logic.split_path(d.get(CONF_PROF_FOLDER, "")),
-                    cam_ids=list(d.get(CONF_PROF_CAMS) or []),
-                    pattern=d.get(CONF_PROF_PATTERN) or DEFAULT_PATTERN,
-                    triggers=list(d.get(CONF_PROF_TRIGGERS) or []),
-                    after_s=int(d.get(CONF_PROF_AFTER) or 0),
-                    max_min=int(d.get(CONF_PROF_MAX) or 0),
-                    time_from=d.get(CONF_PROF_FROM) or "",
-                    time_to=d.get(CONF_PROF_TO) or "",
-                    sun=d.get(CONF_PROF_SUN) or "",
-                )
+        if sub.subentry_type == SUBENTRY_PARTNER:
+            p = PartnerCfg(
+                subentry_id=sid,
+                kennung=d[CONF_KENNUNG],
+                anzeige=d.get(CONF_ANZEIGE) or logic.default_anzeige(d[CONF_KENNUNG]),
+                ordner_nr=int(d.get(CONF_ORDNER_NR, 1)),
+                forum_id=str(d.get(CONF_FORUM_ID, "") or ""),
+                initial=dict(d.get(CONF_INITIAL, {})),
+            )
+            self.partners[p.kennung] = p
 
     async def async_load(self) -> None:
         stored = await self._store.async_load()
@@ -271,18 +238,9 @@ class SpielpartnerManager:
         rec = self.opt(CONF_RECORDING_ENTITY)
         if rec:
             self._unsubs.append(async_track_state_change_event(self.hass, [rec], self._recording_changed))
-        watch = {e for p in self.profiles.values() for e in p.triggers}
-        if any(p.sun for p in self.profiles.values()):
-            watch.add("sun.sun")
-        if watch:
-            self._unsubs.append(async_track_state_change_event(self.hass, sorted(watch), self._profile_state_changed))
-        if self.profiles:
-            self._unsubs.append(async_track_time_interval(self.hass, self._profile_tick, timedelta(seconds=20)))
         if self.opt(CONF_RECORDER_URL):
             self._unsubs.append(async_track_time_interval(self.hass, self._poll_recorder, timedelta(seconds=15)))
-            self.hass.async_create_background_task(self._first_sync(), name=f"{DOMAIN}_poll")
-        elif self.profiles:
-            self.hass.async_create_background_task(self._profile_tick(None), name=f"{DOMAIN}_profiles")
+            self.hass.async_create_background_task(self._poll_recorder(None), name=f"{DOMAIN}_poll")
 
     async def async_stop(self) -> None:
         for unsub in self._unsubs:
@@ -298,6 +256,10 @@ class SpielpartnerManager:
     # ---------------------------------------------------------------- Helfer
     def opt(self, key: str) -> Any:
         val = self.entry.options.get(key)
+        if val in (None, "") and key in (CONF_RECORDER_URL, CONF_RECORDER_KEY):
+            hub = self.hub_entry()  # leer = Einstellung von Cam Recorder Profile
+            val = hub.options.get(key) if hub else None
+            return val or (DEFAULT_RECORDER_URL if key == CONF_RECORDER_URL else None)
         return DEFAULT_OPTIONS.get(key) if val is None and key in DEFAULT_OPTIONS else val
 
     @property
@@ -603,6 +565,14 @@ class SpielpartnerManager:
             self._set_status(f"Recorder: {err}")
             self.notify()
 
+    def _busy_cam_ids(self) -> set[str]:
+        """Cams, die gerade in einem Aufnahme-Profil (Cam Recorder Profile) aufnehmen."""
+        busy: set[str] = set()
+        for pid, ps in (self.rec_status.get("profile") or {}).items():
+            if pid != LEGACY_PROFILE and ps.get("aufnahme"):
+                busy |= {k for k, c in (ps.get("kameras") or {}).items() if c.get("status") != "beendet"}
+        return busy
+
     # ------------------------------------------------------------------ Recorder
     async def _stream_url(self, cam: CamCfg) -> str | None:
         if cam.rtsp_url:
@@ -631,7 +601,7 @@ class SpielpartnerManager:
             now = dt_util.now()
             cams: list[dict[str, str]] = []
             skipped: list[str] = []
-            busy = self._busy_cam_ids(LEGACY_PROFILE)
+            busy = self._busy_cam_ids()
             for cam in self.cams:
                 if not cam.record:
                     continue
@@ -649,7 +619,7 @@ class SpielpartnerManager:
                 )
             session = f"#{logic.pad(p.ordner_nr)}.{logic.pad(s['saison'])}.{logic.pad(s['aufnahmen'])} Sitzung"
             try:
-                await client.start(rel, cams, session)
+                await client.start(rel, cams, session, LEGACY_PROFILE)
             except RecorderError as err:
                 self.rec_online = False if "nicht erreichbar" in str(err) else self.rec_online
                 self._set_status(f"Recorder konnte nicht starten: {err}")
@@ -673,7 +643,7 @@ class SpielpartnerManager:
             if not self._rec_running:
                 return {"gestoppt": False, "grund": "Es laeuft keine Aufnahme des Recorders"}
             try:
-                await client.stop()
+                await client.stop(LEGACY_PROFILE)
             except RecorderError as err:
                 self._set_status(f"Recorder konnte nicht stoppen: {err}")
                 persistent_notification.async_create(
@@ -701,7 +671,6 @@ class SpielpartnerManager:
             return
         self.rec_status, self.rec_online = st, True
         legacy = (st.get("profile") or {}).get(LEGACY_PROFILE) or {} if "profile" in st else st
-        await self._sync_profiles(st)
         if self._rec_running and not self._rec_lock.locked():
             if legacy.get("aufnahme"):
                 if self._reattach:  # HA wurde neu gestartet, Aufnahme laeuft weiter
@@ -723,193 +692,6 @@ class SpielpartnerManager:
                 await self._rec_stopped()
                 self._set_status(f"Recorder: Aufnahme ist beendet worden - Grund: {reason}")
         self.notify()
-
-    # ------------------------------------------------------------------ Profile
-    def profile(self, ref: str) -> ProfileCfg:
-        if ref in self.profiles:
-            return self.profiles[ref]
-        norm = logic.norm(ref)
-        for p in self.profiles.values():
-            if norm == logic.norm(p.name):
-                return p
-        raise ServiceValidationError(f"Aufnahme-Profil '{ref}' gibt es nicht")
-
-    def profile_running(self, pid: str) -> bool:
-        return pid in self.profile_state
-
-    def _busy_cam_ids(self, exclude: str) -> set[str]:
-        """Cams, die gerade in einem anderen Profil aufnehmen (nach Add-on-Stand und eigenem Merker)."""
-        busy: set[str] = set()
-        for pid, st in self.profile_state.items():
-            if pid != exclude:
-                busy |= set(st.get("cams") or [])
-        for pid, ps in (self.rec_status.get("profile") or {}).items():
-            if pid != exclude and ps.get("aufnahme"):
-                busy |= {k for k, c in (ps.get("kameras") or {}).items() if c.get("status") != "beendet"}
-        return busy
-
-    def _trigger_on(self, p: ProfileCfg) -> bool:
-        return any((st := self.hass.states.get(e)) is not None and st.state == STATE_ON for e in p.triggers)
-
-    def _window_open(self, p: ProfileCfg, now: datetime) -> bool:
-        if p.time_from and p.time_to and not logic.in_time_window(now, p.time_from, p.time_to):
-            return False
-        if p.sun:
-            sun = self.hass.states.get("sun.sun")
-            if sun is None or sun.state not in ("above_horizon", "below_horizon"):
-                return False
-            if (sun.state == "above_horizon") != (p.sun == "tag"):
-                return False
-        return True
-
-    def _wanted(self, p: ProfileCfg, now: datetime) -> bool:
-        if not p.triggers and not p.has_window:
-            return False  # nur manuell
-        if not self._window_open(p, now):
-            return False
-        return self._trigger_on(p) if p.triggers else True
-
-    @callback
-    def _profile_state_changed(self, _event: Event[EventStateChangedData]) -> None:
-        self.hass.async_create_task(self._profile_tick(None))
-
-    async def _first_sync(self) -> None:
-        """Beim Start erst den Add-on-Stand holen (laufende Profile erkennen), dann Ausloeser auswerten."""
-        await self._poll_recorder(None)
-        await self._profile_tick(None)
-
-    async def _profile_tick(self, _now: datetime | None) -> None:
-        """Gleicht jedes Profil mit seinen Ausloesern ab (Start, Nachlauf, Hoechstdauer, Zeitfenster)."""
-        async with self._prof_lock:
-            now = dt_util.now()
-            for p in list(self.profiles.values()):
-                try:
-                    await self._reconcile(p, now)
-                except HomeAssistantError as err:
-                    _LOGGER.error("Profil %s: %s", p.name, err)
-                    self._set_status(f"Profil {p.name}: {err}")
-                    self.notify()
-
-    async def _reconcile(self, p: ProfileCfg, now: datetime) -> None:
-        run = self.profile_state.get(p.subentry_id)
-        wanted = self._wanted(p, now)
-        if not wanted:
-            self._capped.discard(p.subentry_id)  # Trigger vorbei -> naechste Runde darf wieder starten
-        if run is None:
-            if wanted and p.subentry_id not in self._capped:
-                await self._profile_start(p, manual=False)
-            return
-        if run.get("manual"):
-            return
-        if wanted:
-            run["off_since"] = None
-            if p.max_min and (dt_util.utcnow() - dt_util.parse_datetime(run["start"])).total_seconds() >= p.max_min * 60:
-                self._capped.add(p.subentry_id)
-                await self._profile_stop(p, "hoechstdauer")
-            return
-        if p.has_window and not self._window_open(p, now):
-            await self._profile_stop(p, "zeitfenster")
-            return
-        off = run.get("off_since")
-        if off is None:
-            run["off_since"] = dt_util.utcnow().isoformat()
-            off = run["off_since"]
-        if (dt_util.utcnow() - dt_util.parse_datetime(off)).total_seconds() >= p.after_s:
-            await self._profile_stop(p, "ausloeser_aus")
-
-    async def async_profile_start(self, ref: str) -> dict[str, Any]:
-        p = self.profile(ref)
-        async with self._prof_lock:
-            if p.subentry_id in self.profile_state:
-                return {"gestartet": False, "grund": "Profil nimmt bereits auf"}
-            return await self._profile_start(p, manual=True)
-
-    async def async_profile_stop(self, ref: str) -> dict[str, Any]:
-        p = self.profile(ref)
-        async with self._prof_lock:
-            if p.subentry_id not in self.profile_state:
-                return {"gestoppt": False, "grund": "Profil nimmt nicht auf"}
-            await self._profile_stop(p, "manuell")
-            return {"gestoppt": True}
-
-    async def _profile_start(self, p: ProfileCfg, manual: bool) -> dict[str, Any]:
-        client = self._recorder()
-        busy = self._busy_cam_ids(p.subentry_id)
-        now = dt_util.now()
-        by_id = {c.subentry_id: c for c in self.cams}
-        cams: list[dict[str, str]] = []
-        skipped: list[str] = []
-        for cid in p.cam_ids:
-            cam = by_id.get(cid)
-            if cam is None or not cam.record:
-                continue
-            if cid in busy:
-                skipped.append(f"{cam.name} (belegt)")
-                continue
-            url = await self._stream_url(cam)
-            if not url:
-                skipped.append(f"{cam.name} (keine Stream-Quelle)")
-                continue
-            stem = logic.render_pattern(p.pattern, now, cam=cam.name, kuerzel=cam.kuerzel, profil=p.name)
-            cams.append({"id": cid, "name": cam.name, "url": url, "stem": stem})
-        if not cams:
-            if manual:
-                raise ServiceValidationError(f"Profil {p.name}: keine Cam frei oder ohne Stream-Quelle ({', '.join(skipped) or 'keine Cams gewaehlt'})")
-            return {"gestartet": False, "grund": "keine Cam verfuegbar", "uebersprungen": skipped}
-        session = logic.render_pattern("{profil} %CCYY-%MM-%DD %hh-%mm-%ss", now, cam="", kuerzel="", profil=p.name)
-        try:
-            await client.start(p.folder, cams, session, p.subentry_id)
-        except RecorderError as err:
-            if "nicht erreichbar" in str(err):
-                self.rec_online = False
-            self._set_status(f"Profil {p.name}: Start fehlgeschlagen: {err}")
-            self.notify()
-            if manual:
-                raise
-            _LOGGER.warning("Profil %s konnte nicht starten: %s", p.name, err)
-            return {"gestartet": False, "grund": str(err)}
-        self.profile_state[p.subentry_id] = {
-            "start": dt_util.utcnow().isoformat(),
-            "manual": manual,
-            "cams": [c["id"] for c in cams],
-            "off_since": None,
-        }
-        self._set_status(f"Profil {p.name}: nimmt auf ({len(cams)} Cams)")
-        self.notify()
-        return {"gestartet": True, "cams": [c["name"] for c in cams], "uebersprungen": skipped, "ordner": "/".join(p.folder)}
-
-    async def _profile_stop(self, p: ProfileCfg, reason: str) -> None:
-        client = self._recorder()
-        try:
-            await client.stop(p.subentry_id)
-        except RecorderError as err:
-            self._set_status(f"Profil {p.name}: Stoppen fehlgeschlagen: {err}")
-            self.notify()
-            raise
-        self.profile_state.pop(p.subentry_id, None)
-        self._set_status(f"Profil {p.name}: Aufnahme beendet ({reason})")
-        self.notify()
-
-    async def _sync_profiles(self, st: dict[str, Any]) -> None:
-        """Add-on-Stand uebernehmen: nach HA-Neustart weiterlaufende Profile erkennen, verlorene melden."""
-        if "profile" not in st:
-            return
-        remote = st["profile"]
-        for pid, p in self.profiles.items():
-            ps = remote.get(pid) or {}
-            if ps.get("aufnahme") and pid not in self.profile_state:
-                cams = [k for k, c in (ps.get("kameras") or {}).items() if c.get("status") != "beendet"]
-                self.profile_state[pid] = {"start": dt_util.utcnow().isoformat(), "manual": False, "cams": cams, "off_since": None}
-            elif not ps.get("aufnahme") and pid in self.profile_state and not self._prof_lock.locked():
-                self.profile_state.pop(pid, None)
-                reason = ps.get("stop_grund") or "unbekannt (Add-on neu gestartet?)"
-                persistent_notification.async_create(
-                    self.hass,
-                    f"Das Profil '{p.name}' wurde vom Recorder beendet. Grund: {reason}.",
-                    title="Recorder: Profil unerwartet beendet",
-                    notification_id=f"{DOMAIN}_profile_lost_{pid}",
-                )
-                self._set_status(f"Profil {p.name}: beendet - Grund: {reason}")
 
     async def _post_due(self, _now: datetime) -> None:
         self._post_cancel = None

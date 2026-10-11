@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Spiel Saison aufnehmen",
-        "description": "Basic settings. Everything can be changed later. The 16 default cams are created.",
+        "description": "Basic settings, changeable later under 'Configure'. Cams and the recorder address come from 'Cam Recorder Profile'.",
         "data": {
           "discord_token": "Discord bot token (empty = Discord off)",
           "ordner_praefix": "Folder prefix (e.g. 'Spielen mit')",
@@ -12,8 +12,8 @@
           "post_nach_minuten": "Status post after x minutes of recording",
           "post_abstand_sekunden": "Gap between cam posts in seconds",
           "schaukel_entity": "Swing cover (optional, position in the post)",
-          "recorder_url": "Recorder: add-on address",
-          "recorder_schluessel": "Recorder: key (add-on api_key)",
+          "recorder_url": "Recorder: address (empty = same as Cam Recorder Profile)",
+          "recorder_schluessel": "Recorder: key (empty = same as Cam Recorder Profile)",
           "spielen_ordner": "Player folder inside the recorder root (e.g. Der_Fuchsbau/Spielen_Spezial; empty = directly in root)"
         }
       }
@@ -34,8 +34,8 @@
           "post_nach_minuten": "Status post after x minutes of recording",
           "post_abstand_sekunden": "Gap between cam posts in seconds",
           "schaukel_entity": "Swing cover (optional, position in the post)",
-          "recorder_url": "Recorder: add-on address",
-          "recorder_schluessel": "Recorder: key (add-on api_key)",
+          "recorder_url": "Recorder: address (empty = same as Cam Recorder Profile)",
+          "recorder_schluessel": "Recorder: key (empty = same as Cam Recorder Profile)",
           "spielen_ordner": "Player folder inside the recorder root (e.g. Der_Fuchsbau/Spielen_Spezial; empty = directly in root)"
         }
       }
@@ -81,98 +81,32 @@
     },
     "cam": {
       "initiate_flow": {
-        "user": "Add cam",
-        "reconfigure": "Edit cam"
+        "user": "Add Discord settings for a cam",
+        "reconfigure": "Edit Discord settings"
       },
-      "entry_type": "Cam",
+      "entry_type": "Discord cam",
       "step": {
         "user": {
-          "title": "New cam",
+          "title": "Cam for Discord",
+          "description": "The cam itself (name, abbreviation, stream) lives in 'Cam Recorder Profile'. Here only: snapshot camera and whether the cam appears in the Discord post.",
           "data": {
-            "name": "Name (e.g. Fuchsblick)",
-            "kuerzel": "Abbreviation (e.g. FB)",
-            "kamera_entity": "Camera for snapshots (optional)",
+            "cam_id": "Cam",
             "discord_posten": "Post to Discord",
-            "aufnehmen": "Recorder: record this cam",
-            "stream_entity": "Recorder: stream source via an HA camera",
-            "rtsp_url": "Recorder: or direct RTSP URL (takes priority)"
+            "kamera_entity": "Camera for snapshots (optional)"
           }
         },
         "reconfigure": {
-          "title": "Edit cam",
+          "title": "Edit Discord settings",
+          "description": "Cam: {cam}",
           "data": {
-            "kuerzel": "Abbreviation",
-            "kamera_entity": "Camera for snapshots (optional)",
             "discord_posten": "Post to Discord",
-            "aufnehmen": "Recorder: record this cam",
-            "stream_entity": "Recorder: stream source via an HA camera",
-            "rtsp_url": "Recorder: or direct RTSP URL (takes priority)"
+            "kamera_entity": "Camera for snapshots (optional)"
           }
         }
       },
-      "error": {
-        "already_configured": "This cam already exists.",
-        "kuerzel_required": "Please enter an abbreviation."
-      },
       "abort": {
-        "reconfigure_successful": "Saved."
-      }
-    },
-    "profil": {
-      "initiate_flow": {
-        "user": "Add recording profile",
-        "reconfigure": "Edit recording profile"
-      },
-      "entry_type": "Recording profile",
-      "step": {
-        "user": {
-          "title": "New recording profile",
-          "description": "A profile defines which cams record into which folder and when. A cam may be in several profiles but never records in two at once (first come, first served). Without trigger and time window the profile starts manually only. Time window/sun only: records continuously in that window. With triggers (e.g. motion sensor): records while any is 'on'. In the file name pattern, cam, kuerzel and profil in curly braces stand for name, short code and profile; plus date/time with %CCYY %MM %DD %hh %mm %ss. The next step picks the subfolder.",
-          "data": {
-            "name": "Name (e.g. Stairs)",
-            "cams": "Cams",
-            "dateimuster": "File name pattern",
-            "ausloeser": "Triggers (motion/switch/sensor, 'on' = record) - empty = no trigger",
-            "nachlauf_sekunden": "Run-on after 'off' in seconds",
-            "max_dauer_minuten": "Max duration per recording in minutes (0 = unlimited)",
-            "zeit_von": "Only from (time)",
-            "zeit_bis": "Only until (time)",
-            "sonne": "Sun",
-            "hauptordner": "Main folder (pick or type a new one)"
-          }
-        },
-        "reconfigure": {
-          "title": "Edit recording profile",
-          "description": "A profile defines which cams record into which folder and when. A cam may be in several profiles but never records in two at once (first come, first served). Without trigger and time window the profile starts manually only. Time window/sun only: records continuously in that window. With triggers (e.g. motion sensor): records while any is 'on'. In the file name pattern, cam, kuerzel and profil in curly braces stand for name, short code and profile; plus date/time with %CCYY %MM %DD %hh %mm %ss. The next step picks the subfolder.",
-          "data": {
-            "name": "Name (e.g. Stairs)",
-            "cams": "Cams",
-            "dateimuster": "File name pattern",
-            "ausloeser": "Triggers (motion/switch/sensor, 'on' = record) - empty = no trigger",
-            "nachlauf_sekunden": "Run-on after 'off' in seconds",
-            "max_dauer_minuten": "Max duration per recording in minutes (0 = unlimited)",
-            "zeit_von": "Only from (time)",
-            "zeit_bis": "Only until (time)",
-            "sonne": "Sun",
-            "hauptordner": "Main folder (pick or type a new one)"
-          }
-        },
-        "unterordner": {
-          "title": "Subfolder",
-          "description": "Subfolder inside {hauptordner} (empty = directly in the main folder; you can type your own, use / for more levels).",
-          "data": {
-            "unterordner": "Subfolder"
-          }
-        }
-      },
-      "error": {
-        "already_configured": "This name already exists (or is empty).",
-        "folder_required": "Please enter a target folder.",
-        "cams_required": "Please pick at least one cam.",
-        "time_both": "Please set 'from' and 'until' together."
-      },
-      "abort": {
-        "reconfigure_successful": "Saved."
+        "reconfigure_successful": "Saved.",
+        "no_free_cams": "All cams already have Discord settings (add new cams in 'Cam Recorder Profile' first)."
       }
     }
   },
@@ -228,12 +162,6 @@
       },
       "recorder_aufnahme": {
         "name": "Recorder recording"
-      },
-      "cam_aufnahme": {
-        "name": "Recording"
-      },
-      "profil_aufnahme": {
-        "name": "Recording"
       }
     }
   },
@@ -304,26 +232,6 @@
       "name": "Stop recorder",
       "description": "Stops the recording cleanly and counts it.",
       "fields": {}
-    },
-    "profil_starten": {
-      "name": "Start profile",
-      "description": "Starts a recording profile manually (runs until 'Stop profile').",
-      "fields": {
-        "profil": {
-          "name": "Profile",
-          "description": "Profile name"
-        }
-      }
-    },
-    "profil_stoppen": {
-      "name": "Stop profile",
-      "description": "Ends a recording profile.",
-      "fields": {
-        "profil": {
-          "name": "Profile",
-          "description": "Profile name"
-        }
-      }
     }
   }
 }
