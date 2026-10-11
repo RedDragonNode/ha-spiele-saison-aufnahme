@@ -40,6 +40,7 @@ from .const import (
     CONF_CAM_POST,
     CONF_CAM_RECORD,
     CONF_CAM_RTSP,
+    CONF_CAM_SPIEL,
     CONF_CAM_STREAM,
     CONF_DISCORD_TOKEN,
     CONF_FOLDER_PREFIX,
@@ -105,6 +106,7 @@ class CamCfg:
     kuerzel: str
     camera_entity: str = ""
     post: bool = False
+    spiel: bool = True  # bei der Spielpartner-Aufnahme dabei
     record: bool = True
     stream_entity: str = ""
     rtsp_url: str = ""
@@ -174,6 +176,7 @@ class SpielpartnerManager:
                 continue
             cam.camera_entity = sub.data.get(CONF_CAM_CAMERA, "") or ""
             cam.post = bool(sub.data.get(CONF_CAM_POST, bool(cam.camera_entity)))
+            cam.spiel = bool(sub.data.get(CONF_CAM_SPIEL, True))
         self.cams = sorted(by_id.values(), key=lambda c: logic.norm(c.name))
 
     def _read_subentry(self, sid: str, sub: Any) -> None:
@@ -603,7 +606,7 @@ class SpielpartnerManager:
             skipped: list[str] = []
             busy = self._busy_cam_ids()
             for cam in self.cams:
-                if not cam.record:
+                if not cam.record or not cam.spiel:
                     continue
                 if cam.subentry_id in busy:
                     skipped.append(f"{cam.name} (nimmt in einem Profil auf)")

@@ -49,6 +49,7 @@ CONF_CAM_ID = "cam_id"  # ID der Cam in Cam Recorder Profile
 CONF_CAM_NAME = "name"
 CONF_CAM_KUERZEL = "kuerzel"
 CONF_CAM_FILTER = "filter_entity"  # alt, wird nicht mehr genutzt
+CONF_CAM_SPIEL = "bei_spielpartner"  # Cam bei der Spielpartner-Aufnahme mitnehmen (Standard: ja)
 CONF_CAM_POST = "discord_posten"
 CONF_CAM_CAMERA = "kamera_entity"  # Schnappschuss fuer Discord
 CONF_CAM_RECORD = "aufnehmen"  # Recorder: diese Cam aufnehmen

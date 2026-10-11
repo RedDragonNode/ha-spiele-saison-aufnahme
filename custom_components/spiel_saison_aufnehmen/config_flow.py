@@ -22,6 +22,7 @@ from .const import (
     CONF_CAM_ID,
     CONF_CAM_NAME,
     CONF_CAM_POST,
+    CONF_CAM_SPIEL,
     CONF_DISCORD_TOKEN,
     CONF_FOLDER_PREFIX,
     CONF_FORMAT_SUFFIX,
@@ -222,7 +223,12 @@ class CamSubentryFlow(ConfigSubentryFlow):
         if user_input is not None:
             cam_id = user_input[CONF_CAM_ID]
             camera = user_input.get(CONF_CAM_CAMERA, "") or ""
-            data = {CONF_CAM_ID: cam_id, CONF_CAM_CAMERA: camera, CONF_CAM_POST: bool(user_input.get(CONF_CAM_POST, bool(camera)))}
+            data = {
+                CONF_CAM_ID: cam_id,
+                CONF_CAM_CAMERA: camera,
+                CONF_CAM_POST: bool(user_input.get(CONF_CAM_POST, bool(camera))),
+                CONF_CAM_SPIEL: bool(user_input.get(CONF_CAM_SPIEL, True)),
+            }
             return self.async_create_entry(title=f"Discord {free[cam_id]}", data=data, unique_id=cam_id)
         options = [selector.SelectOptionDict(value=sid, label=name) for sid, name in sorted(free.items(), key=lambda kv: logic.norm(kv[1]))]
         schema = vol.Schema(
@@ -230,6 +236,7 @@ class CamSubentryFlow(ConfigSubentryFlow):
                 vol.Required(CONF_CAM_ID): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.DROPDOWN)
                 ),
+                vol.Optional(CONF_CAM_SPIEL, default=True): selector.BooleanSelector(),
                 vol.Optional(CONF_CAM_POST, default=True): selector.BooleanSelector(),
                 vol.Optional(CONF_CAM_CAMERA): _ent("camera"),
             }
@@ -240,10 +247,16 @@ class CamSubentryFlow(ConfigSubentryFlow):
         sub = self._get_reconfigure_subentry()
         if user_input is not None:
             camera = user_input.get(CONF_CAM_CAMERA, "") or ""
-            data = {**sub.data, CONF_CAM_CAMERA: camera, CONF_CAM_POST: bool(user_input.get(CONF_CAM_POST, False))}
+            data = {
+                **sub.data,
+                CONF_CAM_CAMERA: camera,
+                CONF_CAM_POST: bool(user_input.get(CONF_CAM_POST, False)),
+                CONF_CAM_SPIEL: bool(user_input.get(CONF_CAM_SPIEL, True)),
+            }
             return self.async_update_and_abort(self._get_entry(), sub, data=data)
         schema = vol.Schema(
             {
+                vol.Optional(CONF_CAM_SPIEL, default=bool(sub.data.get(CONF_CAM_SPIEL, True))): selector.BooleanSelector(),
                 vol.Optional(CONF_CAM_POST, default=bool(sub.data.get(CONF_CAM_POST))): selector.BooleanSelector(),
                 vol.Optional(CONF_CAM_CAMERA): _ent("camera"),
             }

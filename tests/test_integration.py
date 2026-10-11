@@ -552,3 +552,16 @@ async def test_recorder_calls_use_the_default_session(hass: HomeAssistant) -> No
         await m.async_recorder_start()
         await m.async_recorder_stop()
     assert seen == [("start", "default"), ("stop", "default")]
+
+
+async def test_cam_can_be_excluded_from_spielpartner_recording(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    m = entry.runtime_data
+    sid = next(i for i, s in entry.subentries.items() if s.data.get("cam_id") == "cam_Fuchsblick")
+    hass.config_entries.async_update_subentry(entry, entry.subentries[sid], data={**entry.subentries[sid].data, "bei_spielpartner": False})
+    await hass.async_block_till_done()
+    m = entry.runtime_data
+    await m.async_prepare("frank_visselff")
+    with _stream_patch():
+        res = await m.async_recorder_start()
+    assert "Fuchsblick" not in res["cams"] and "Kesselcam" in res["cams"]

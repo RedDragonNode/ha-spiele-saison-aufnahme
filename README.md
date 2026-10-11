@@ -37,7 +37,7 @@ vorbereiten, Zähler führen, die Cams über *Cam Recorder Profile* aufnehmen un
    Recorder-Adresse und -Schlüssel leer lassen = wie in *Cam Recorder Profile*.
 2. **Cams** legst du in *Cam Recorder Profile* an (Name, Kürzel, Stream-Quelle oder RTSP-Adresse). Alle diese Cams nehmen
    bei der Spielpartner-Aufnahme mit auf (es sei denn dort „aufnehmen“ abgewählt ist).
-3. **Discord-Zusatz je Cam (optional):** *Discord-Cam hinzufügen* – Schnappschuss-Kamera und „In Discord posten“.
+3. **Discord-Zusatz je Cam (optional):** *Discord-Cam hinzufügen* – Schnappschuss-Kamera und „In Discord posten“ sowie „Bei der Spielpartner-Aufnahme mitnehmen“ (abwählen = diese Cam nimmt beim Spielen nicht mit auf, Profile in *Cam Recorder Profile* bleiben davon unberührt).
 4. **Spielpartner hinzufügen:** Kennung, Anzeigename, Ordner-Nummer (`#01`), Discord-Forum-Kanal-ID und Startwerte
    der Zähler (leer = 1).
 

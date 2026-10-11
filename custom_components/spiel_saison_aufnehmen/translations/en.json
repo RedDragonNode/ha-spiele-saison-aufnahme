@@ -92,7 +92,8 @@
           "data": {
             "cam_id": "Cam",
             "discord_posten": "Post to Discord",
-            "kamera_entity": "Camera for snapshots (optional)"
+            "kamera_entity": "Camera for snapshots (optional)",
+            "bei_spielpartner": "Include in the Spielpartner recording"
           }
         },
         "reconfigure": {
@@ -100,7 +101,8 @@
           "description": "Cam: {cam}",
           "data": {
             "discord_posten": "Post to Discord",
-            "kamera_entity": "Camera for snapshots (optional)"
+            "kamera_entity": "Camera for snapshots (optional)",
+            "bei_spielpartner": "Include in the Spielpartner recording"
           }
         }
       },
