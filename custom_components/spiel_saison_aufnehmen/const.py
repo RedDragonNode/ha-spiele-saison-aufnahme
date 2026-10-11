@@ -1,7 +1,7 @@
-"""Konstanten der Integration Spielpartner Aufnahme."""
+"""Konstanten der Integration Spiel Saison aufnehmen."""
 from __future__ import annotations
 
-DOMAIN = "spielpartner_aufnahme"
+DOMAIN = "spiel_saison_aufnehmen"
 
 SUBENTRY_PARTNER = "spielpartner"
 SUBENTRY_CAM = "cam"

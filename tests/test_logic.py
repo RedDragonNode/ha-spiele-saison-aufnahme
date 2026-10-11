@@ -1,4 +1,4 @@
-from custom_components.spielpartner_aufnahme import logic
+from custom_components.spiel_saison_aufnehmen import logic
 
 
 def test_norm():

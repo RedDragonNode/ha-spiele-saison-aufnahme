@@ -1,7 +1,7 @@
 # Spielpartner Recorder
 
 Schreibt die RTSP-Streams der Kameras **ohne Neukodierung** (ffmpeg `-c copy`) in Dateien. Gesteuert wird das Add-on
-von der Integration *Spielpartner Aufnahme* (Modus „Recorder" oder „Beide"). Das Add-on selbst hat keine Oberflaeche.
+von der Integration *Spiel Saison aufnehmen* (Modus „Recorder" oder „Beide"). Das Add-on selbst hat keine Oberflaeche.
 
 ## Einrichtung
 1. Ordner `addon/spielpartner_recorder` aus dem Repository nach `/addons/spielpartner_recorder` auf dem HA-Server kopieren

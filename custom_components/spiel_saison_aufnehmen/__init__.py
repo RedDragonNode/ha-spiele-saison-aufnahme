@@ -1,4 +1,4 @@
-"""Spielpartner Aufnahme: Spielpartner, Cams, Zaehler, Recorder und Discord an einem Ort."""
+"""Spiel Saison aufnehmen: Spielpartner, Cams, Zaehler, Recorder und Discord an einem Ort."""
 from __future__ import annotations
 
 import voluptuous as vol
@@ -41,7 +41,7 @@ def _manager(hass: HomeAssistant) -> SpielpartnerManager:
     for entry in hass.config_entries.async_entries(DOMAIN):
         if getattr(entry, "runtime_data", None) is not None:
             return entry.runtime_data
-    raise ServiceValidationError("Spielpartner Aufnahme ist nicht eingerichtet oder nicht geladen")
+    raise ServiceValidationError("Spiel Saison aufnehmen ist nicht eingerichtet oder nicht geladen")
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -113,7 +113,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SpielpartnerConfigEntry)
     hub = registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.entry_id)},
-        name="Spielpartner Aufnahme",
+        name="Spiel Saison aufnehmen",
         manufacturer="RedDragonNode",
         model="Aufnahme-Verwaltung",
         entry_type=dr.DeviceEntryType.SERVICE,

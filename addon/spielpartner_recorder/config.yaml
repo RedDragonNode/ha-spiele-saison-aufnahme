@@ -2,7 +2,7 @@ name: Spielpartner Recorder
 version: "0.3.0"
 slug: spielpartner_recorder
 description: Schreibt die RTSP-Streams der Kameras per Stream-Copy (ohne Neukodierung) auf die Platte.
-url: https://github.com/RedDragonNode/ha-spielen-spezial-spielpartner
+url: https://github.com/RedDragonNode/ha-spiel-saison-aufnehmen
 arch:
   - amd64
   - aarch64

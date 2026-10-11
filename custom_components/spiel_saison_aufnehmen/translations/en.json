@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Spielpartner Aufnahme",
+        "title": "Spiel Saison aufnehmen",
         "description": "Basic settings. Everything can be changed later. The 16 default cams are created.",
         "data": {
           "discord_token": "Discord bot token (empty = Discord off)",

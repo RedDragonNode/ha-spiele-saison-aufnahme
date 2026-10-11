@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from homeassistant.components import persistent_notification
@@ -222,6 +224,8 @@ class SpielpartnerManager:
 
     async def async_load(self) -> None:
         stored = await self._store.async_load()
+        if not stored:
+            stored = await self.hass.async_add_executor_job(self._import_old_store)
         if stored:
             self.data.update(stored)
         self.data.setdefault("partners", {})
@@ -241,6 +245,26 @@ class SpielpartnerManager:
             self.data["active"] = None
         self._rec_running = self._reattach = bool((self.data.get("recorder") or {}).get("laeuft"))
         self._save_later()
+
+    def _import_old_store(self) -> dict[str, Any] | None:
+        """Zaehler/Threads aus der frueheren Integration 'spielpartner_aufnahme' uebernehmen (einmalig, falls vorhanden)."""
+        folder = Path(self.hass.config.path(".storage"))
+        try:
+            files = sorted(folder.glob("spielpartner_aufnahme.*"), key=lambda f: f.stat().st_mtime, reverse=True)
+        except OSError:
+            return None
+        for f in files:
+            if f.suffix in (".bak", ".tmp"):
+                continue
+            try:
+                data = json.loads(f.read_text(encoding="utf-8")).get("data") or {}
+            except (OSError, ValueError):
+                continue
+            if isinstance(data.get("partners"), dict):
+                _LOGGER.info("Zaehler aus der frueheren Integration uebernommen (%s)", f.name)
+                keep = ("active", "partners", "status")
+                return {k: data[k] for k in keep if k in data}
+        return None
 
     @callback
     def async_start(self) -> None:

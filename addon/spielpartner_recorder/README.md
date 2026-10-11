@@ -1,1 +1,1 @@
-Teil des Repositories *ha-spielen-spezial-spielpartner* (privat). Beschreibung: siehe `DOCS.md`.
+Teil des Repositories *ha-spiel-saison-aufnehmen* (privat). Beschreibung: siehe `DOCS.md`.

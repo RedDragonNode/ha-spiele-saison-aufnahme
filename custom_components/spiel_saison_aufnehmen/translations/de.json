@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Spielpartner Aufnahme",
+        "title": "Spiel Saison aufnehmen",
         "description": "Grundeinstellungen. Alles lässt sich später unter 'Konfigurieren' ändern. Die 16 Standard-Cams werden mit angelegt.",
         "data": {
           "discord_token": "Discord-Bot-Token (leer = Discord aus)",

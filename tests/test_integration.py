@@ -9,13 +9,13 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.spielpartner_aufnahme.config_flow import _default_subentries
-from custom_components.spielpartner_aufnahme.const import (
+from custom_components.spiel_saison_aufnehmen.config_flow import _default_subentries
+from custom_components.spiel_saison_aufnehmen.const import (
     DOMAIN,
     SUBENTRY_CAM,
     SUBENTRY_PARTNER,
 )
-from custom_components.spielpartner_aufnahme.recorder_client import RecorderError
+from custom_components.spiel_saison_aufnehmen.recorder_client import RecorderError
 
 BASE = {
     "ordner_praefix": "Spielen mit",
@@ -82,7 +82,7 @@ class FakeRecorder:
 def fake_recorder():
     FakeRecorder.dirs, FakeRecorder.running, FakeRecorder.calls = {}, False, []
     FakeRecorder.fail, FakeRecorder.stop_reason = False, ""
-    with patch("custom_components.spielpartner_aufnahme.manager.RecorderClient", FakeRecorder):
+    with patch("custom_components.spiel_saison_aufnehmen.manager.RecorderClient", FakeRecorder):
         yield
 
 
@@ -118,7 +118,7 @@ async def _setup(hass: HomeAssistant, profiles: list[dict] | None = None, **extr
 
 def _stream_patch():
     return patch(
-        "custom_components.spielpartner_aufnahme.manager.async_get_stream_source",
+        "custom_components.spiel_saison_aufnehmen.manager.async_get_stream_source",
         AsyncMock(return_value="rtsp://k:k@192.168.1.12/stream"),
     )
 
@@ -158,7 +158,7 @@ async def test_start_stop_service_counts_once_and_names_files(hass: HomeAssistan
     assert next(c["url"] for c in cams if c["name"] == "Fuchsblick") == "rtsp://u:p@192.168.1.11:554/main"
     assert next(c["url"] for c in cams if c["name"] == "Kesselcam").startswith("rtsp://k:k@")
     assert session == "#01.02.03 Sitzung"
-    assert hass.states.get("binary_sensor.spielpartner_aufnahme_recorder_recording").state == "on"
+    assert hass.states.get("binary_sensor.spiel_saison_aufnehmen_recorder_recording").state == "on"
     again = await m.async_recorder_start()
     assert again["gestartet"] is False  # idempotent
     await hass.services.async_call(DOMAIN, "recorder_stoppen", {}, blocking=True)
@@ -166,7 +166,7 @@ async def test_start_stop_service_counts_once_and_names_files(hass: HomeAssistan
     assert (s["aufnahmen"], s["gesamt"]) == (4, 15)
     await m.async_recorder_stop()  # zweites Stoppen zaehlt nicht nochmal
     assert (s["aufnahmen"], s["gesamt"]) == (4, 15)
-    assert hass.states.get("binary_sensor.spielpartner_aufnahme_recorder_recording").state == "off"
+    assert hass.states.get("binary_sensor.spiel_saison_aufnehmen_recorder_recording").state == "off"
 
 
 async def test_start_requires_active_partner_and_prepare(hass: HomeAssistant) -> None:
@@ -283,7 +283,7 @@ async def test_discord_post_sequence(hass: HomeAssistant) -> None:
             posted.append((channel, text, images))
 
     with patch.object(m, "_discord", return_value=FakeClient()), patch(
-        "custom_components.spielpartner_aufnahme.manager.async_get_image", AsyncMock(return_value=FakeImg())
+        "custom_components.spiel_saison_aufnehmen.manager.async_get_image", AsyncMock(return_value=FakeImg())
     ):
         r = await m.async_post_update()
         await m._post_task
@@ -423,7 +423,7 @@ async def test_profile_max_duration_and_lost_detection(hass: HomeAssistant) -> N
 async def test_profile_subentry_flow(hass: HomeAssistant) -> None:
     entry = await _setup(hass)
     FakeRecorder.dirs = {"": ["Der_Fuchsbau", "Ueberwachung"], "Ueberwachung": ["Treppe"]}
-    with patch("custom_components.spielpartner_aufnahme.config_flow.RecorderClient", FakeRecorder):
+    with patch("custom_components.spiel_saison_aufnehmen.config_flow.RecorderClient", FakeRecorder):
         flow = await hass.config_entries.subentries.async_init((entry.entry_id, "profil"), context={"source": "user"})
         bad = await hass.config_entries.subentries.async_configure(flow["flow_id"], {"name": "T", "hauptordner": "A", "cams": []})
         assert bad["errors"] == {"cams": "cams_required"}
@@ -447,3 +447,17 @@ async def test_broken_subentry_is_skipped_not_fatal(hass: HomeAssistant) -> None
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     assert len(entry.runtime_data.cams) == len(_default_subentries()) and not entry.runtime_data.partners
+
+
+async def test_counters_imported_from_old_integration_store(hass: HomeAssistant) -> None:
+    import json
+    from pathlib import Path
+
+    folder = Path(hass.config.path(".storage"))
+    folder.mkdir(parents=True, exist_ok=True)
+    old = {"version": 1, "key": "spielpartner_aufnahme.abc", "data": {"active": None, "partners": {
+        "frank_visselff": {"saison": 5, "aufnahmen": 7, "gesamt": 42, "thread_id": "99", "thread_saison": "05", "pfad": "", "vorbereitet": None}}}}
+    (folder / "spielpartner_aufnahme.abc").write_text(json.dumps(old))
+    entry = await _setup(hass)
+    st = entry.runtime_data.state_of("frank_visselff")
+    assert (st["saison"], st["aufnahmen"], st["gesamt"], st["thread_id"]) == (5, 7, 42, "99")

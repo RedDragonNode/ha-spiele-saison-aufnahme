@@ -8,7 +8,7 @@ Entity-IDs entstehen aus Anzeigename und Sprache; in der Oberfläche anklicken u
 type: vertical-stack
 cards:
   - type: tile
-    entity: sensor.spielpartner_aufnahme_aktueller_spielpartner
+    entity: sensor.spiel_saison_aufnehmen_aktueller_spielpartner
     name: Aktueller Spielpartner
     icon: mdi:account-voice
   - type: entities
@@ -32,7 +32,7 @@ name: Aufnahme vorbereiten (Frank)
 icon: mdi:video-plus
 tap_action:
   action: perform-action
-  perform_action: spielpartner_aufnahme.aufnahme_vorbereiten
+  perform_action: spiel_saison_aufnehmen.aufnahme_vorbereiten
   data:
     spielpartner: frank_visselff
 ```
@@ -54,9 +54,9 @@ entities:
 type: entities
 title: Recorder
 entities:
-  - binary_sensor.spielpartner_aufnahme_recorder_erreichbar
-  - binary_sensor.spielpartner_aufnahme_recorder_nimmt_auf
-  - sensor.spielpartner_aufnahme_recorder_freier_speicher
-  - button.spielpartner_aufnahme_recorder_starten
-  - button.spielpartner_aufnahme_recorder_stoppen
+  - binary_sensor.spiel_saison_aufnehmen_recorder_erreichbar
+  - binary_sensor.spiel_saison_aufnehmen_recorder_nimmt_auf
+  - sensor.spiel_saison_aufnehmen_recorder_freier_speicher
+  - button.spiel_saison_aufnehmen_recorder_starten
+  - button.spiel_saison_aufnehmen_recorder_stoppen
 ```
