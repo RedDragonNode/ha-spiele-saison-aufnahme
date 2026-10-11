@@ -13,7 +13,7 @@ from aiohttp import web
 from recorder_core import CamSpec, Options, Recorder, RecorderError
 
 _LOGGER = logging.getLogger("recorder.server")
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 
 def _path(value: Any) -> list[str]:
@@ -64,11 +64,16 @@ def create_app(recorder: Recorder, api_key: str) -> web.Application:
             if not isinstance(raw, dict) or not all(isinstance(raw.get(k), str) and raw.get(k) for k in ("id", "name", "url", "stem")):
                 raise RecorderError("Jede Kamera braucht id, name, url und stem")
             cams.append(CamSpec(raw["id"], raw["name"], raw["url"], raw["stem"]))
-        result = await recorder.start(_path(data.get("path")), cams, str(data.get("session") or "Sitzung"))
+        result = await recorder.start(_path(data.get("path")), cams, str(data.get("session") or "Sitzung"), str(data.get("profile") or "default"))
         return web.json_response(result)
 
     async def stop(request: web.Request) -> web.Response:
-        return web.json_response(await recorder.stop("manuell"))
+        try:
+            data = await request.json()
+        except (json.JSONDecodeError, ValueError):
+            data = {}
+        profile = data.get("profile") if isinstance(data, dict) else None
+        return web.json_response(await recorder.stop("manuell", str(profile) if profile else None))
 
     async def on_shutdown(_: web.Application) -> None:
         await recorder.stop("addon_beendet")
@@ -108,6 +113,7 @@ def main() -> None:
         min_free_gb=float(o.get("mindest_frei_gb", 20)),
         wallclock=bool(o.get("wallclock_zeitstempel", False)),
         video_tag=str(o.get("video_tag", "") or ""),
+        loglevel=str(o.get("ffmpeg_loglevel", "warning") or "warning"),
     )
     opts.validate()
     _LOGGER.info("Recorder %s startet - Ordner %s, Container %s, Audio %s", VERSION, root, opts.container, opts.audio)

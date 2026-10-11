@@ -7,7 +7,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN
-from .manager import CamCfg, PartnerCfg, SpielpartnerManager
+from .manager import CamCfg, PartnerCfg, ProfileCfg, SpielpartnerManager
 
 
 class SpielpartnerEntity(Entity):
@@ -44,4 +44,13 @@ def cam_device(manager: SpielpartnerManager, c: CamCfg) -> DeviceInfo:
         name=f"Cam {c.name}",
         manufacturer="RedDragonNode",
         model="Cam",
+    )
+
+
+def profile_device(manager: SpielpartnerManager, p: ProfileCfg) -> DeviceInfo:
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{manager.entry.entry_id}_prof_{p.subentry_id}")},
+        name=f"Profil {p.name}",
+        manufacturer="RedDragonNode",
+        model="Aufnahme-Profil",
     )

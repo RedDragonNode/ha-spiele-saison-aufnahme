@@ -59,6 +59,8 @@ def test_helpers(tmp_path):
     with pytest.raises(RecorderError):
         safe_join(tmp_path, "link")
     assert mask_url("x rtsp://admin:geheim@192.168.1.5/stream y") == "x rtsp://***@192.168.1.5/stream y"
+    # '@' im Passwort darf nichts durchlassen
+    assert mask_url("rtsp://admin:ge@heim@192.168.1.5:554/11") == "rtsp://***@192.168.1.5:554/11"
 
 
 async def test_record_and_stop(tmp_path, sample):
@@ -139,3 +141,20 @@ async def test_double_start_and_dirs(tmp_path, sample):
     with pytest.raises(RecorderError):
         await rec.start(["a"], [spec(sample)], "s")
     await rec.stop()
+
+
+async def test_two_profiles_in_parallel_and_busy_cam(tmp_path, sample):
+    rec = Recorder(tmp_path, Options(min_free_gb=0.001))
+    await rec.start(["Tag"], [spec(sample, "a", "a")], "S1", profile="tag")
+    await rec.start(["Nacht"], [spec(sample, "b", "b")], "S2", profile="nacht")
+    st = rec.status()
+    assert set(st["profile"]) == {"tag", "nacht"} and set(st["kameras"]) == {"a", "b"} and st["aufnahme"]
+    with pytest.raises(RecorderError, match="anderen Profil"):
+        await rec.start(["Nacht2"], [spec(sample, "a", "a")], "S3", profile="nacht2")
+    with pytest.raises(RecorderError, match="bereits"):
+        await rec.start(["Tag"], [spec(sample, "c", "c")], "S1", profile="tag")
+    await rec.stop(profile="tag")
+    assert rec.status()["profile"]["tag"]["aufnahme"] is False and rec.recording
+    await rec.start(["Nacht2"], [spec(sample, "a", "a")], "S3", profile="nacht2")  # Cam ist wieder frei
+    await rec.stop()
+    assert not rec.recording

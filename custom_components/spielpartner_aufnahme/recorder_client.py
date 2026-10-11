@@ -44,8 +44,13 @@ class RecorderClient:
     async def make_dirs(self, path: list[str]) -> str:
         return (await self._request("POST", "/mkdir", json={"path": path})).get("pfad", "")
 
-    async def start(self, path: list[str], cams: list[dict[str, str]], session: str) -> dict[str, Any]:
-        return await self._request("POST", "/start", json={"path": path, "cams": cams, "session": session})
+    async def start(
+        self, path: list[str], cams: list[dict[str, str]], session: str, profile: str | None = None
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {"path": path, "cams": cams, "session": session}
+        if profile:
+            body["profile"] = profile
+        return await self._request("POST", "/start", json=body)
 
-    async def stop(self) -> dict[str, Any]:
-        return await self._request("POST", "/stop", json={})
+    async def stop(self, profile: str | None = None) -> dict[str, Any]:
+        return await self._request("POST", "/stop", json={"profile": profile} if profile else {})

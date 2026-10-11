@@ -13,7 +13,8 @@
           "post_abstand_sekunden": "Abstand zwischen den Cam-Beiträgen in Sekunden",
           "schaukel_entity": "Schaukel-Cover (optional, für die Position im Beitrag)",
           "recorder_url": "Recorder: Adresse des Add-ons (http://local-spielpartner-recorder:8099)",
-          "recorder_schluessel": "Recorder: Schlüssel (api_key des Add-ons)"
+          "recorder_schluessel": "Recorder: Schlüssel (api_key des Add-ons)",
+          "spielen_ordner": "Spielpartner-Ordner im Recorder-Stammordner (z.B. Der_Fuchsbau/Spielen_Spezial; leer = direkt im Stamm)"
         }
       }
     },
@@ -34,7 +35,8 @@
           "post_abstand_sekunden": "Abstand zwischen den Cam-Beiträgen in Sekunden",
           "schaukel_entity": "Schaukel-Cover (optional, für die Position im Beitrag)",
           "recorder_url": "Recorder: Adresse des Add-ons (http://local-spielpartner-recorder:8099)",
-          "recorder_schluessel": "Recorder: Schlüssel (api_key des Add-ons)"
+          "recorder_schluessel": "Recorder: Schlüssel (api_key des Add-ons)",
+          "spielen_ordner": "Spielpartner-Ordner im Recorder-Stammordner (z.B. Der_Fuchsbau/Spielen_Spezial; leer = direkt im Stamm)"
         }
       }
     }
@@ -115,6 +117,56 @@
       "abort": {
         "reconfigure_successful": "Gespeichert."
       }
+    },
+    "profil": {
+      "initiate_flow": {
+        "user": "Aufnahme-Profil hinzufügen",
+        "reconfigure": "Aufnahme-Profil bearbeiten"
+      },
+      "entry_type": "Aufnahme-Profil",
+      "step": {
+        "user": {
+          "title": "Neues Aufnahme-Profil",
+          "description": "Ein Profil legt fest, in welchen Ordner welche Cams aufnehmen und wann. Eine Cam darf in mehreren Profilen stehen, nimmt aber nie in zwei gleichzeitig auf (wer zuerst kommt). Ohne Auslöser und ohne Zeitfenster startet das Profil nur von Hand. Nur Zeitfenster/Sonne: nimmt in dieser Zeit durchgehend auf. Mit Auslöser (z.B. Bewegungsmelder): nimmt auf, solange einer 'an' ist.",
+          "data": {
+            "name": "Name (z.B. Treppe)",
+            "ordner": "Zielordner im Recorder (z.B. Ueberwachung/Treppe)",
+            "cams": "Cams",
+            "dateimuster": "Dateiname ({cam}, {kuerzel}, {profil}, %DD.%MM.%CCYY %hh-%mm-%ss)",
+            "ausloeser": "Auslöser (Bewegung/Schalter/Sensor, 'an' = aufnehmen) - leer = kein Auslöser",
+            "nachlauf_sekunden": "Nachlauf nach 'aus' in Sekunden",
+            "max_dauer_minuten": "Höchstdauer pro Aufnahme in Minuten (0 = unbegrenzt)",
+            "zeit_von": "Nur von (Uhrzeit)",
+            "zeit_bis": "Nur bis (Uhrzeit)",
+            "sonne": "Sonne"
+          }
+        },
+        "reconfigure": {
+          "title": "Aufnahme-Profil bearbeiten",
+          "description": "Ein Profil legt fest, in welchen Ordner welche Cams aufnehmen und wann. Eine Cam darf in mehreren Profilen stehen, nimmt aber nie in zwei gleichzeitig auf (wer zuerst kommt). Ohne Auslöser und ohne Zeitfenster startet das Profil nur von Hand. Nur Zeitfenster/Sonne: nimmt in dieser Zeit durchgehend auf. Mit Auslöser (z.B. Bewegungsmelder): nimmt auf, solange einer 'an' ist.",
+          "data": {
+            "name": "Name (z.B. Treppe)",
+            "ordner": "Zielordner im Recorder (z.B. Ueberwachung/Treppe)",
+            "cams": "Cams",
+            "dateimuster": "Dateiname ({cam}, {kuerzel}, {profil}, %DD.%MM.%CCYY %hh-%mm-%ss)",
+            "ausloeser": "Auslöser (Bewegung/Schalter/Sensor, 'an' = aufnehmen) - leer = kein Auslöser",
+            "nachlauf_sekunden": "Nachlauf nach 'aus' in Sekunden",
+            "max_dauer_minuten": "Höchstdauer pro Aufnahme in Minuten (0 = unbegrenzt)",
+            "zeit_von": "Nur von (Uhrzeit)",
+            "zeit_bis": "Nur bis (Uhrzeit)",
+            "sonne": "Sonne"
+          }
+        }
+      },
+      "error": {
+        "already_configured": "Diesen Namen gibt es schon (oder er ist leer).",
+        "folder_required": "Bitte einen Zielordner angeben.",
+        "cams_required": "Bitte mindestens eine Cam wählen.",
+        "time_both": "Bitte 'von' und 'bis' zusammen angeben."
+      },
+      "abort": {
+        "reconfigure_successful": "Gespeichert."
+      }
     }
   },
   "entity": {
@@ -171,6 +223,9 @@
         "name": "Recorder nimmt auf"
       },
       "cam_aufnahme": {
+        "name": "Aufnahme"
+      },
+      "profil_aufnahme": {
         "name": "Aufnahme"
       }
     }
@@ -242,6 +297,26 @@
       "name": "Recorder stoppen",
       "description": "Beendet die Aufnahme sauber und zählt sie.",
       "fields": {}
+    },
+    "profil_starten": {
+      "name": "Profil starten",
+      "description": "Startet ein Aufnahme-Profil von Hand (läuft bis 'Profil stoppen').",
+      "fields": {
+        "profil": {
+          "name": "Profil",
+          "description": "Name des Profils"
+        }
+      }
+    },
+    "profil_stoppen": {
+      "name": "Profil stoppen",
+      "description": "Beendet ein Aufnahme-Profil.",
+      "fields": {
+        "profil": {
+          "name": "Profil",
+          "description": "Name des Profils"
+        }
+      }
     }
   }
 }

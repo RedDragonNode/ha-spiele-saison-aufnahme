@@ -38,16 +38,29 @@ from .const import (
     CONF_ORDNER_NR,
     CONF_POST_DELAY,
     CONF_POST_GAP,
+    CONF_PROF_AFTER,
+    CONF_PROF_CAMS,
+    CONF_PROF_FOLDER,
+    CONF_PROF_FROM,
+    CONF_PROF_MAX,
+    CONF_PROF_NAME,
+    CONF_PROF_PATTERN,
+    CONF_PROF_SUN,
+    CONF_PROF_TO,
+    CONF_PROF_TRIGGERS,
     CONF_RECORDER_KEY,
     CONF_RECORDER_URL,
     CONF_RECORDING_ENTITY,
+    CONF_SPIEL_BASE,
     CONF_SWING_ENTITY,
     DEFAULT_CAMERAS,
     DEFAULT_CAMS,
     DEFAULT_OPTIONS,
+    DEFAULT_PATTERN,
     DOMAIN,
     SUBENTRY_CAM,
     SUBENTRY_PARTNER,
+    SUBENTRY_PROFILE,
 )
 
 _TEXT = selector.TextSelector()
@@ -81,6 +94,7 @@ SETTINGS_SCHEMA = vol.Schema(
         vol.Optional(CONF_DISCORD_TOKEN): _SECRET,
         vol.Required(CONF_FOLDER_PREFIX): _TEXT,
         vol.Optional(CONF_FORMAT_SUFFIX): _TEXT,
+        vol.Optional(CONF_SPIEL_BASE): _TEXT,
         vol.Optional(CONF_RECORDING_ENTITY): _ent("binary_sensor", "switch", "input_boolean"),
         vol.Required(CONF_POST_DELAY): _num(1, 120),
         vol.Optional(CONF_POST_GAP): _num(0, 300),
@@ -148,7 +162,11 @@ class SpielpartnerConfigFlow(ConfigFlow, domain=DOMAIN):
     @classmethod
     @callback
     def async_get_supported_subentry_types(cls, config_entry: ConfigEntry) -> dict[str, type[ConfigSubentryFlow]]:
-        return {SUBENTRY_PARTNER: PartnerSubentryFlow, SUBENTRY_CAM: CamSubentryFlow}
+        return {
+            SUBENTRY_PARTNER: PartnerSubentryFlow,
+            SUBENTRY_CAM: CamSubentryFlow,
+            SUBENTRY_PROFILE: ProfileSubentryFlow,
+        }
 
 
 class SpielpartnerOptionsFlow(OptionsFlow):
@@ -295,4 +313,99 @@ class CamSubentryFlow(ConfigSubentryFlow):
                 user_input or dict(sub.data),
             ),
             errors=errors,
+        )
+
+
+# ------------------------------------------------------------------- Profile
+class ProfileSubentryFlow(ConfigSubentryFlow):
+    """Aufnahme-Profil: wohin, welche Cams, welcher Ausloeser."""
+
+    def _schema(self) -> vol.Schema:
+        cams = [
+            selector.SelectOptionDict(value=sid, label=s.data[CONF_CAM_NAME])
+            for sid, s in sorted(self._get_entry().subentries.items(), key=lambda kv: logic.norm(kv[1].data.get(CONF_CAM_NAME, "")))
+            if s.subentry_type == SUBENTRY_CAM
+        ]
+        return vol.Schema(
+            {
+                vol.Required(CONF_PROF_NAME): _TEXT,
+                vol.Required(CONF_PROF_FOLDER): _TEXT,
+                vol.Required(CONF_PROF_CAMS): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=cams, multiple=True, mode=selector.SelectSelectorMode.DROPDOWN)
+                ),
+                vol.Optional(CONF_PROF_PATTERN, default=DEFAULT_PATTERN): _TEXT,
+                vol.Optional(CONF_PROF_TRIGGERS): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain=["binary_sensor", "switch", "input_boolean", "sensor"], multiple=True
+                    )
+                ),
+                vol.Optional(CONF_PROF_AFTER): _num(0, 3600),
+                vol.Optional(CONF_PROF_MAX): _num(0, 1440),
+                vol.Optional(CONF_PROF_FROM): selector.TimeSelector(),
+                vol.Optional(CONF_PROF_TO): selector.TimeSelector(),
+                vol.Optional(CONF_PROF_SUN): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value="", label="egal"),
+                            selector.SelectOptionDict(value="tag", label="nur bei Tag (Sonne über dem Horizont)"),
+                            selector.SelectOptionDict(value="nacht", label="nur bei Nacht (Sonne unter dem Horizont)"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            }
+        )
+
+    @staticmethod
+    def _data(user_input: dict[str, Any]) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            CONF_PROF_NAME: user_input[CONF_PROF_NAME].strip(),
+            CONF_PROF_FOLDER: "/".join(logic.split_path(user_input[CONF_PROF_FOLDER])),
+            CONF_PROF_CAMS: list(user_input.get(CONF_PROF_CAMS) or []),
+            CONF_PROF_PATTERN: (user_input.get(CONF_PROF_PATTERN) or DEFAULT_PATTERN).strip(),
+            CONF_PROF_TRIGGERS: list(user_input.get(CONF_PROF_TRIGGERS) or []),
+            CONF_PROF_AFTER: int(user_input.get(CONF_PROF_AFTER) or 0),
+            CONF_PROF_MAX: int(user_input.get(CONF_PROF_MAX) or 0),
+            CONF_PROF_FROM: user_input.get(CONF_PROF_FROM) or "",
+            CONF_PROF_TO: user_input.get(CONF_PROF_TO) or "",
+            CONF_PROF_SUN: user_input.get(CONF_PROF_SUN) or "",
+        }
+        return data
+
+    def _errors(self, data: dict[str, Any], own: str | None) -> dict[str, str]:
+        errors: dict[str, str] = {}
+        taken = {
+            logic.norm(s.data[CONF_PROF_NAME])
+            for sid, s in self._get_entry().subentries.items()
+            if s.subentry_type == SUBENTRY_PROFILE and sid != own
+        }
+        if not data[CONF_PROF_NAME] or logic.norm(data[CONF_PROF_NAME]) in taken:
+            errors[CONF_PROF_NAME] = "already_configured"
+        if not data[CONF_PROF_FOLDER]:
+            errors[CONF_PROF_FOLDER] = "folder_required"
+        if not data[CONF_PROF_CAMS]:
+            errors[CONF_PROF_CAMS] = "cams_required"
+        if bool(data[CONF_PROF_FROM]) != bool(data[CONF_PROF_TO]):
+            errors[CONF_PROF_TO] = "time_both"
+        return errors
+
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data = self._data(user_input)
+            errors = self._errors(data, None)
+            if not errors:
+                return self.async_create_entry(title=data[CONF_PROF_NAME], data=data, unique_id=logic.norm(data[CONF_PROF_NAME]))
+        return self.async_show_form(step_id="user", data_schema=_suggest(self._schema(), user_input or {}), errors=errors)
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        sub = self._get_reconfigure_subentry()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            data = self._data(user_input)
+            errors = self._errors(data, sub.subentry_id)
+            if not errors:
+                return self.async_update_and_abort(self._get_entry(), sub, title=data[CONF_PROF_NAME], data=data)
+        return self.async_show_form(
+            step_id="reconfigure", data_schema=_suggest(self._schema(), user_input or dict(sub.data)), errors=errors
         )

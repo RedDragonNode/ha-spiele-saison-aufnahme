@@ -13,7 +13,8 @@
           "post_abstand_sekunden": "Gap between cam posts in seconds",
           "schaukel_entity": "Swing cover (optional, position in the post)",
           "recorder_url": "Recorder: add-on address",
-          "recorder_schluessel": "Recorder: key (add-on api_key)"
+          "recorder_schluessel": "Recorder: key (add-on api_key)",
+          "spielen_ordner": "Player folder inside the recorder root (e.g. Der_Fuchsbau/Spielen_Spezial; empty = directly in root)"
         }
       }
     },
@@ -34,7 +35,8 @@
           "post_abstand_sekunden": "Gap between cam posts in seconds",
           "schaukel_entity": "Swing cover (optional, position in the post)",
           "recorder_url": "Recorder: add-on address",
-          "recorder_schluessel": "Recorder: key (add-on api_key)"
+          "recorder_schluessel": "Recorder: key (add-on api_key)",
+          "spielen_ordner": "Player folder inside the recorder root (e.g. Der_Fuchsbau/Spielen_Spezial; empty = directly in root)"
         }
       }
     }
@@ -115,6 +117,56 @@
       "abort": {
         "reconfigure_successful": "Saved."
       }
+    },
+    "profil": {
+      "initiate_flow": {
+        "user": "Add recording profile",
+        "reconfigure": "Edit recording profile"
+      },
+      "entry_type": "Recording profile",
+      "step": {
+        "user": {
+          "title": "New recording profile",
+          "description": "A profile defines which cams record into which folder and when. A cam may be in several profiles but never records in two at once (first come, first served). Without trigger and time window the profile starts manually only. Time window/sun only: records continuously in that window. With triggers (e.g. motion sensor): records while any is 'on'.",
+          "data": {
+            "name": "Name (e.g. Stairs)",
+            "ordner": "Target folder in the recorder (e.g. Ueberwachung/Treppe)",
+            "cams": "Cams",
+            "dateimuster": "File name ({cam}, {kuerzel}, {profil}, %DD.%MM.%CCYY %hh-%mm-%ss)",
+            "ausloeser": "Triggers (motion/switch/sensor, 'on' = record) - empty = no trigger",
+            "nachlauf_sekunden": "Run-on after 'off' in seconds",
+            "max_dauer_minuten": "Max duration per recording in minutes (0 = unlimited)",
+            "zeit_von": "Only from (time)",
+            "zeit_bis": "Only until (time)",
+            "sonne": "Sun"
+          }
+        },
+        "reconfigure": {
+          "title": "Edit recording profile",
+          "description": "A profile defines which cams record into which folder and when. A cam may be in several profiles but never records in two at once (first come, first served). Without trigger and time window the profile starts manually only. Time window/sun only: records continuously in that window. With triggers (e.g. motion sensor): records while any is 'on'.",
+          "data": {
+            "name": "Name (e.g. Stairs)",
+            "ordner": "Target folder in the recorder (e.g. Ueberwachung/Treppe)",
+            "cams": "Cams",
+            "dateimuster": "File name ({cam}, {kuerzel}, {profil}, %DD.%MM.%CCYY %hh-%mm-%ss)",
+            "ausloeser": "Triggers (motion/switch/sensor, 'on' = record) - empty = no trigger",
+            "nachlauf_sekunden": "Run-on after 'off' in seconds",
+            "max_dauer_minuten": "Max duration per recording in minutes (0 = unlimited)",
+            "zeit_von": "Only from (time)",
+            "zeit_bis": "Only until (time)",
+            "sonne": "Sun"
+          }
+        }
+      },
+      "error": {
+        "already_configured": "This name already exists (or is empty).",
+        "folder_required": "Please enter a target folder.",
+        "cams_required": "Please pick at least one cam.",
+        "time_both": "Please set 'from' and 'until' together."
+      },
+      "abort": {
+        "reconfigure_successful": "Saved."
+      }
     }
   },
   "entity": {
@@ -171,6 +223,9 @@
         "name": "Recorder recording"
       },
       "cam_aufnahme": {
+        "name": "Recording"
+      },
+      "profil_aufnahme": {
         "name": "Recording"
       }
     }
@@ -242,6 +297,26 @@
       "name": "Stop recorder",
       "description": "Stops the recording cleanly and counts it.",
       "fields": {}
+    },
+    "profil_starten": {
+      "name": "Start profile",
+      "description": "Starts a recording profile manually (runs until 'Stop profile').",
+      "fields": {
+        "profil": {
+          "name": "Profile",
+          "description": "Profile name"
+        }
+      }
+    },
+    "profil_stoppen": {
+      "name": "Stop profile",
+      "description": "Ends a recording profile.",
+      "fields": {
+        "profil": {
+          "name": "Profile",
+          "description": "Profile name"
+        }
+      }
     }
   }
 }

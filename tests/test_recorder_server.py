@@ -62,3 +62,18 @@ async def test_start_stop(client):
     assert st["aufnahme"] is False
     r = await client.post("/start", json={"path": ["A"], "cams": [{"id": "x"}]}, headers=H)
     assert r.status == 400
+
+
+async def test_profiles_over_api(client):
+    a = [{"id": "a", "name": "A", "url": "rtsp://h/a", "stem": "a"}]
+    b = [{"id": "b", "name": "B", "url": "rtsp://h/b", "stem": "b"}]
+    assert (await client.post("/start", json={"path": ["T"], "cams": a, "profile": "tag"}, headers=H)).status == 200
+    assert (await client.post("/start", json={"path": ["N"], "cams": b, "profile": "nacht"}, headers=H)).status == 200
+    r = await client.post("/start", json={"path": ["N2"], "cams": a, "profile": "x"}, headers=H)
+    assert r.status == 400 and "anderen Profil" in (await r.json())["fehler"]
+    st = await (await client.get("/status", headers=H)).json()
+    assert set(st["profile"]) == {"tag", "nacht"}
+    st = await (await client.post("/stop", json={"profile": "tag"}, headers=H)).json()
+    assert st["profile"]["tag"]["aufnahme"] is False and st["aufnahme"] is True
+    st = await (await client.post("/stop", headers=H)).json()
+    assert st["aufnahme"] is False

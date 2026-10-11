@@ -1,4 +1,5 @@
 """Integration + Recorder-Add-on (Add-on ist durch einen Fake ersetzt)."""
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -64,13 +65,13 @@ class FakeRecorder:
             FakeRecorder.dirs["/".join(path[:-1])].append(path[-1])
         return "/".join(path)
 
-    async def start(self, path, cams, session):
+    async def start(self, path, cams, session, profile=None):
         self._chk()
         FakeRecorder.calls.append(("start", path, cams, session))
         FakeRecorder.running = True
         return {}
 
-    async def stop(self):
+    async def stop(self, profile=None):
         self._chk()
         FakeRecorder.calls.append(("stop",))
         FakeRecorder.running = False
@@ -85,9 +86,10 @@ def fake_recorder():
         yield
 
 
-async def _setup(hass: HomeAssistant, **extra) -> MockConfigEntry:
+async def _setup(hass: HomeAssistant, profiles: list[dict] | None = None, **extra) -> MockConfigEntry:
     subs = _default_subentries()
     for sub in subs:
+        sub["subentry_id"] = "cam_" + sub["data"]["name"]
         if sub["data"]["name"] == "Fuchsblick":
             sub["data"]["rtsp_url"] = "rtsp://u:p@192.168.1.11:554/main"
         elif sub["data"]["name"] == "Kesselcam":
@@ -104,6 +106,8 @@ async def _setup(hass: HomeAssistant, **extra) -> MockConfigEntry:
                   "initial": {"saison": 2, "aufnahmen": 3, "gesamt": 14}},
         )
     )
+    for prof in profiles or []:
+        subs.append(ConfigSubentryData(subentry_type="profil", title=prof["name"], unique_id=prof["name"].lower(), subentry_id="prof_" + prof["name"], data=prof))
     entry = MockConfigEntry(domain=DOMAIN, data={}, options={**BASE, **extra}, subentries_data=subs, unique_id=DOMAIN)
     entry.add_to_hass(hass)
     hass.states.async_set("binary_sensor.rec", "off")
@@ -331,3 +335,99 @@ async def test_options_flow_reloads_and_drops_old_obs_options(hass: HomeAssistan
     await hass.async_block_till_done()
     assert entry.options["post_nach_minuten"] == 9
     assert "basis_pfad_obs" not in entry.options and "modus" not in entry.options
+
+
+# ----------------------------------------------------------------- Aufnahme-Profile
+def _prof(name, cams, **kw):
+    return {"name": name, "ordner": kw.pop("ordner", f"Ueberwachung/{name}"), "cams": [f"cam_{c}" for c in cams],
+            "dateimuster": "{cam} %CCYY", "ausloeser": [], "nachlauf_sekunden": 0, "max_dauer_minuten": 0,
+            "zeit_von": "", "zeit_bis": "", "sonne": "", **kw}
+
+
+async def test_profile_motion_trigger_starts_and_stops(hass: HomeAssistant) -> None:
+    hass.states.async_set("binary_sensor.treppe", "off")
+    await _setup(hass, [_prof("Treppe", ["Fuchsblick"], ausloeser=["binary_sensor.treppe"])])
+    hass.states.async_set("binary_sensor.treppe", "on")
+    await hass.async_block_till_done()
+    kind, path, cams, session = FakeRecorder.calls[-1]
+    assert kind == "start" and path == ["Ueberwachung", "Treppe"] and cams[0]["id"] == "cam_Fuchsblick"
+    assert cams[0]["stem"] == f"Fuchsblick {dt_util.now().year}" and session.startswith("Treppe ")
+    hass.states.async_set("binary_sensor.treppe", "off")
+    await hass.async_block_till_done()
+    assert FakeRecorder.calls[-1] == ("stop",)
+
+
+async def test_profile_run_on_delay_and_manual_services(hass: HomeAssistant) -> None:
+    hass.states.async_set("binary_sensor.flur", "off")
+    entry = await _setup(hass, [_prof("Flur", ["Fuchsblick"], ausloeser=["binary_sensor.flur"], nachlauf_sekunden=3600)])
+    m = entry.runtime_data
+    hass.states.async_set("binary_sensor.flur", "on")
+    await hass.async_block_till_done()
+    hass.states.async_set("binary_sensor.flur", "off")
+    await hass.async_block_till_done()
+    assert m.profile_running("prof_Flur")  # Nachlauf laeuft noch
+    await hass.services.async_call(DOMAIN, "profil_stoppen", {"profil": "Flur"}, blocking=True)
+    assert not m.profile_running("prof_Flur") and FakeRecorder.calls[-1] == ("stop",)
+    await hass.services.async_call(DOMAIN, "profil_starten", {"profil": "flur"}, blocking=True)
+    assert m.profile_running("prof_Flur")
+    hass.states.async_set("binary_sensor.flur", "on")
+    hass.states.async_set("binary_sensor.flur", "off")
+    await hass.async_block_till_done()
+    assert m.profile_running("prof_Flur")  # manuell gestartet: Ausloeser stoppt nicht
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(DOMAIN, "profil_starten", {"profil": "gibtsnicht"}, blocking=True)
+
+
+async def test_profile_cam_in_two_profiles_only_records_once(hass: HomeAssistant) -> None:
+    entry = await _setup(hass, [_prof("A", ["Fuchsblick"]), _prof("B", ["Fuchsblick", "Rotpelz", "Kesselcam"])])
+    m = entry.runtime_data
+    with _stream_patch():
+        await hass.services.async_call(DOMAIN, "profil_starten", {"profil": "A"}, blocking=True)
+        res = await hass.services.async_call(DOMAIN, "profil_starten", {"profil": "B"}, blocking=True, return_response=True)
+    assert [c for c in res["cams"]] == ["Kesselcam"] and any("belegt" in x for x in res["uebersprungen"])
+    assert m.profile_running("prof_A") and m.profile_running("prof_B")
+
+
+async def test_profile_sun_window(hass: HomeAssistant) -> None:
+    hass.states.async_set("sun.sun", "above_horizon")
+    hass.states.async_set("binary_sensor.b", "on")
+    with _stream_patch():
+        entry = await _setup(hass, [_prof("Nacht", ["Fuchsblick"], sonne="nacht"), _prof("Tag", ["Kesselcam"], sonne="tag")])
+        m = entry.runtime_data
+        assert m.profile_running("prof_Tag") and not m.profile_running("prof_Nacht")
+        hass.states.async_set("sun.sun", "below_horizon")
+        await hass.async_block_till_done()
+        await m._profile_tick(None)
+    assert m.profile_running("prof_Nacht") and not m.profile_running("prof_Tag")
+
+
+async def test_profile_max_duration_and_lost_detection(hass: HomeAssistant) -> None:
+    hass.states.async_set("binary_sensor.x", "on")
+    entry = await _setup(hass, [_prof("X", ["Fuchsblick"], ausloeser=["binary_sensor.x"], max_dauer_minuten=1)])
+    m = entry.runtime_data
+    assert m.profile_running("prof_X")
+    m.profile_state["prof_X"]["start"] = (dt_util.utcnow() - timedelta(minutes=2)).isoformat()
+    await m._profile_tick(None)
+    assert not m.profile_running("prof_X")
+    await m._profile_tick(None)
+    assert not m.profile_running("prof_X")  # Trigger noch an, aber Hoechstdauer erreicht -> kein Neustart
+    hass.states.async_set("binary_sensor.x", "off")
+    await m._profile_tick(None)
+    hass.states.async_set("binary_sensor.x", "on")
+    await hass.async_block_till_done()
+    assert m.profile_running("prof_X")
+    await m._sync_profiles({"profile": {"prof_X": {"aufnahme": False, "stop_grund": "speicher_voll"}}})
+    assert not m.profile_running("prof_X")
+
+
+async def test_profile_subentry_flow(hass: HomeAssistant) -> None:
+    entry = await _setup(hass)
+    flow = await hass.config_entries.subentries.async_init((entry.entry_id, "profil"), context={"source": "user"})
+    bad = await hass.config_entries.subentries.async_configure(flow["flow_id"], {"name": "T", "ordner": "A/B", "cams": []})
+    assert bad["errors"] == {"cams": "cams_required"}
+    ok = await hass.config_entries.subentries.async_configure(
+        flow["flow_id"], {"name": "Treppe", "ordner": "Ueberwachung\\Treppe", "cams": ["cam_Fuchsblick"], "zeit_von": "22:00:00", "zeit_bis": "06:00:00"}
+    )
+    assert ok["type"] == "create_entry"
+    sub = next(s for s in entry.subentries.values() if s.subentry_type == "profil")
+    assert sub.data["ordner"] == "Ueberwachung/Treppe" and sub.data["dateimuster"].startswith("{cam}")

@@ -15,13 +15,16 @@ from .const import (
     SERVICE_COUNT,
     SERVICE_POST,
     SERVICE_PREPARE,
+    SERVICE_PROFILE_START,
+    SERVICE_PROFILE_STOP,
     SERVICE_REC_START,
     SERVICE_REC_STOP,
     SERVICE_SET_COUNTERS,
     SUBENTRY_CAM,
     SUBENTRY_PARTNER,
+    SUBENTRY_PROFILE,
 )
-from .entity import cam_device, partner_device
+from .entity import cam_device, partner_device, profile_device
 from .manager import SpielpartnerManager
 
 PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.BUTTON, Platform.BINARY_SENSOR]
@@ -62,6 +65,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def rec_stop(call: ServiceCall) -> dict:
         return await _manager(hass).async_recorder_stop()
 
+    async def prof_start(call: ServiceCall) -> dict:
+        return await _manager(hass).async_profile_start(call.data["profil"])
+
+    async def prof_stop(call: ServiceCall) -> dict:
+        return await _manager(hass).async_profile_stop(call.data["profil"])
+
+    for name, handler in ((SERVICE_PROFILE_START, prof_start), (SERVICE_PROFILE_STOP, prof_stop)):
+        hass.services.async_register(
+            DOMAIN, name, handler, vol.Schema({vol.Required("profil"): cv.string}), supports_response=SupportsResponse.OPTIONAL
+        )
     hass.services.async_register(
         DOMAIN, SERVICE_REC_START, rec_start, vol.Schema({_OPT_PARTNER: cv.string}), supports_response=SupportsResponse.OPTIONAL
     )
@@ -112,6 +125,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SpielpartnerConfigEntry)
         elif sub.subentry_type == SUBENTRY_CAM:
             cam = next((c for c in manager.cams if c.subentry_id == sid), None)
             info = cam_device(manager, cam) if cam else None
+        elif sub.subentry_type == SUBENTRY_PROFILE:
+            info = profile_device(manager, manager.profiles[sid])
         else:
             info = None
         if info:

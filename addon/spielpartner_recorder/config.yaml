@@ -1,5 +1,5 @@
 name: Spielpartner Recorder
-version: "0.2.0"
+version: "0.3.0"
 slug: spielpartner_recorder
 description: Schreibt die RTSP-Streams der Kameras per Stream-Copy (ohne Neukodierung) auf die Platte.
 url: https://github.com/RedDragonNode/ha-spielen-spezial-spielpartner
@@ -20,6 +20,7 @@ options:
   mindest_frei_gb: 20
   wallclock_zeitstempel: false
   video_tag: ""
+  ffmpeg_loglevel: warning
 schema:
   api_key: password
   aufnahme_ordner: str
@@ -29,3 +30,4 @@ schema:
   mindest_frei_gb: float(1,)
   wallclock_zeitstempel: bool
   video_tag: list(|hvc1)?
+  ffmpeg_loglevel: list(warning|info|verbose)?
