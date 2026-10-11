@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/RedDragonNode/ha-spielen-spezial-spielpartner/issues",
   "requirements": [],
   "after_dependencies": ["camera"],
-  "version": "0.4.1"
+  "version": "0.4.2"
 }

@@ -22,9 +22,10 @@ async def async_setup_entry(
     async_add_entities([RecorderOnlineSensor(m), RecorderRunningSensor(m)])
     for sid, sub in entry.subentries.items():
         if sub.subentry_type == SUBENTRY_CAM:
-            cam = next(c for c in m.cams if c.subentry_id == sid)
-            async_add_entities([CamRecordingSensor(m, cam)], config_subentry_id=sid)
-        elif sub.subentry_type == SUBENTRY_PROFILE:
+            cam = next((c for c in m.cams if c.subentry_id == sid), None)
+            if cam:
+                async_add_entities([CamRecordingSensor(m, cam)], config_subentry_id=sid)
+        elif sub.subentry_type == SUBENTRY_PROFILE and sid in m.profiles:
             async_add_entities([ProfileRecordingSensor(m, m.profiles[sid])], config_subentry_id=sid)
 
 

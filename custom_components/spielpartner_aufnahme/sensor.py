@@ -23,13 +23,14 @@ async def async_setup_entry(
     async_add_entities([ActivePartnerSensor(m), StatusSensor(m), RecorderSpaceSensor(m)])
     for sid, sub in entry.subentries.items():
         if sub.subentry_type == SUBENTRY_PARTNER:
-            p = m.partners[sub.data["kennung"]]
+            if (p := m.partners.get(sub.data.get("kennung", ""))) is None:
+                continue
             async_add_entities(
                 [PathSensor(m, p), FormatSensor(m, p), ThreadSensor(m, p)], config_subentry_id=sid
             )
         elif sub.subentry_type == SUBENTRY_CAM:
-            cam = next(c for c in m.cams if c.subentry_id == sid)
-            async_add_entities([CamFormatSensor(m, cam)], config_subentry_id=sid)
+            if (cam := next((c for c in m.cams if c.subentry_id == sid), None)) is not None:
+                async_add_entities([CamFormatSensor(m, cam)], config_subentry_id=sid)
 
 
 class ActivePartnerSensor(SpielpartnerEntity, SensorEntity):

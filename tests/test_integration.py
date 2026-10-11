@@ -436,3 +436,14 @@ async def test_profile_subentry_flow(hass: HomeAssistant) -> None:
     assert ok["type"] == "create_entry"
     sub = next(s for s in entry.subentries.values() if s.subentry_type == "profil")
     assert sub.data["ordner"] == "Ueberwachung/Treppe" and sub.data["dateimuster"].startswith("{cam}")
+
+
+async def test_broken_subentry_is_skipped_not_fatal(hass: HomeAssistant) -> None:
+    subs = _default_subentries()
+    subs.append(ConfigSubentryData(subentry_type=SUBENTRY_CAM, title="Kaputt", unique_id="kaputt", data={"kuerzel": "XX"}))
+    subs.append(ConfigSubentryData(subentry_type=SUBENTRY_PARTNER, title="Leer", unique_id="leer", data={}))
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=BASE, subentries_data=subs, unique_id=DOMAIN)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert len(entry.runtime_data.cams) == len(_default_subentries()) and not entry.runtime_data.partners

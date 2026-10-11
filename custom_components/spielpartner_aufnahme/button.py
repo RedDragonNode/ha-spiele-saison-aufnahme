@@ -17,8 +17,8 @@ async def async_setup_entry(
     m = entry.runtime_data
     async_add_entities([RecorderButton(m, True), RecorderButton(m, False)])
     for sid, sub in entry.subentries.items():
-        if sub.subentry_type == SUBENTRY_PARTNER:
-            async_add_entities([PrepareButton(m, m.partners[sub.data["kennung"]])], config_subentry_id=sid)
+        if sub.subentry_type == SUBENTRY_PARTNER and (p := m.partners.get(sub.data.get("kennung", ""))) is not None:
+            async_add_entities([PrepareButton(m, p)], config_subentry_id=sid)
 
 
 class PrepareButton(SpielpartnerEntity, ButtonEntity):

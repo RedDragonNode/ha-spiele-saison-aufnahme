@@ -23,7 +23,8 @@ async def async_setup_entry(
     m = entry.runtime_data
     for sid, sub in entry.subentries.items():
         if sub.subentry_type == SUBENTRY_PARTNER:
-            p = m.partners[sub.data["kennung"]]
+            if (p := m.partners.get(sub.data.get("kennung", ""))) is None:
+                continue
             async_add_entities(
                 [CounterNumber(m, p, key, field, icon) for key, (field, icon) in COUNTERS.items()],
                 config_subentry_id=sid,

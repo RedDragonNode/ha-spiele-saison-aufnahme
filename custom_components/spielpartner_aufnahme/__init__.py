@@ -120,13 +120,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SpielpartnerConfigEntry)
     )
     for sid, sub in entry.subentries.items():
         if sub.subentry_type == SUBENTRY_PARTNER:
-            p = manager.partners.get(sub.data["kennung"])
+            p = manager.partners.get(sub.data.get("kennung", ""))
             info = partner_device(manager, p) if p else None
         elif sub.subentry_type == SUBENTRY_CAM:
             cam = next((c for c in manager.cams if c.subentry_id == sid), None)
             info = cam_device(manager, cam) if cam else None
         elif sub.subentry_type == SUBENTRY_PROFILE:
-            info = profile_device(manager, manager.profiles[sid])
+            info = profile_device(manager, manager.profiles[sid]) if sid in manager.profiles else None
         else:
             info = None
         if info:

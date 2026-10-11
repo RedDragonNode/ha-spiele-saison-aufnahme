@@ -165,7 +165,22 @@ class SpielpartnerManager:
     # ------------------------------------------------------------------ Setup
     def _read_subentries(self) -> None:
         for sid, sub in self.entry.subentries.items():
-            d = sub.data
+            try:
+                self._read_subentry(sid, sub)
+            except (KeyError, TypeError, ValueError) as err:
+                # Ein defekter Eintrag darf nicht die ganze Integration lahmlegen
+                _LOGGER.error(
+                    "Unterintrag '%s' (%s, id %s) ist unvollstaendig (fehlt: %s) und wird uebersprungen - bitte loeschen oder neu anlegen",
+                    sub.title,
+                    sub.subentry_type,
+                    sid,
+                    err,
+                )
+        self.cams.sort(key=lambda c: logic.norm(c.name))
+
+    def _read_subentry(self, sid: str, sub: Any) -> None:
+        d = sub.data
+        if True:
             if sub.subentry_type == SUBENTRY_PARTNER:
                 p = PartnerCfg(
                     subentry_id=sid,
@@ -204,7 +219,6 @@ class SpielpartnerManager:
                     time_to=d.get(CONF_PROF_TO) or "",
                     sun=d.get(CONF_PROF_SUN) or "",
                 )
-        self.cams.sort(key=lambda c: logic.norm(c.name))
 
     async def async_load(self) -> None:
         stored = await self._store.async_load()
