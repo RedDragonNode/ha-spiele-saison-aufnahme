@@ -50,7 +50,9 @@ CONF_CAM_RTSP = "rtsp_url"  # Recorder: oder direkte RTSP-Adresse (hat Vorrang)
 
 # --- Aufnahme-Profil (Subentry) -------------------------------------------------
 CONF_PROF_NAME = "name"
-CONF_PROF_FOLDER = "ordner"
+CONF_PROF_FOLDER = "ordner"  # gespeichert als "Haupt/Unter"
+CONF_PROF_MAIN = "hauptordner"  # nur im Formular
+CONF_PROF_SUB = "unterordner"  # nur im Formular
 CONF_PROF_CAMS = "cams"  # Liste von Cam-Subentry-IDs
 CONF_PROF_PATTERN = "dateimuster"
 CONF_PROF_TRIGGERS = "ausloeser"  # Liste von Entities (an = aufnehmen)

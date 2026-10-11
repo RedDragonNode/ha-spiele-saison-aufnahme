@@ -71,7 +71,7 @@ Ein Profil bestimmt, **wohin** welche Cams aufnehmen und **wann**. Anlegen: *Int
 | Feld | Bedeutung |
 |---|---|
 | Name | z. B. `Treppe`, `bei Nacht` |
-| Zielordner | relativ zum Add-on-Ordner, z. B. `Ueberwachung/Treppe` (wird angelegt) |
+| Zielordner | zwei Auswahlen: **Hauptordner** (z. B. `Ueberwachung`), im nächsten Schritt **Unterordner** (z. B. `Treppe`). Die Listen kommen vom Recorder; eigene Namen lassen sich eintippen und werden angelegt |
 | Cams | beliebig viele; eine Cam darf in mehreren Profilen stehen |
 | Dateiname | `{cam}`, `{kuerzel}`, `{profil}` und Datum/Zeit `%CCYY %MM %DD %hh %mm %ss`; Standard `{cam} %CCYY-%MM-%DD %hh-%mm-%ss` |
 | Auslöser | Bewegungsmelder, Schalter, Sensor (mehrere möglich): irgendeiner „an" = aufnehmen |

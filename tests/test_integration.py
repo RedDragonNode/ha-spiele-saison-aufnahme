@@ -422,12 +422,17 @@ async def test_profile_max_duration_and_lost_detection(hass: HomeAssistant) -> N
 
 async def test_profile_subentry_flow(hass: HomeAssistant) -> None:
     entry = await _setup(hass)
-    flow = await hass.config_entries.subentries.async_init((entry.entry_id, "profil"), context={"source": "user"})
-    bad = await hass.config_entries.subentries.async_configure(flow["flow_id"], {"name": "T", "ordner": "A/B", "cams": []})
-    assert bad["errors"] == {"cams": "cams_required"}
-    ok = await hass.config_entries.subentries.async_configure(
-        flow["flow_id"], {"name": "Treppe", "ordner": "Ueberwachung\\Treppe", "cams": ["cam_Fuchsblick"], "zeit_von": "22:00:00", "zeit_bis": "06:00:00"}
-    )
+    FakeRecorder.dirs = {"": ["Der_Fuchsbau", "Ueberwachung"], "Ueberwachung": ["Treppe"]}
+    with patch("custom_components.spielpartner_aufnahme.config_flow.RecorderClient", FakeRecorder):
+        flow = await hass.config_entries.subentries.async_init((entry.entry_id, "profil"), context={"source": "user"})
+        bad = await hass.config_entries.subentries.async_configure(flow["flow_id"], {"name": "T", "hauptordner": "A", "cams": []})
+        assert bad["errors"] == {"cams": "cams_required"}
+        step2 = await hass.config_entries.subentries.async_configure(
+            flow["flow_id"],
+            {"name": "Treppe", "hauptordner": "Ueberwachung", "cams": ["cam_Fuchsblick"], "zeit_von": "22:00:00", "zeit_bis": "06:00:00"},
+        )
+        assert step2["step_id"] == "unterordner"
+        ok = await hass.config_entries.subentries.async_configure(flow["flow_id"], {"unterordner": "Treppe"})
     assert ok["type"] == "create_entry"
     sub = next(s for s in entry.subentries.values() if s.subentry_type == "profil")
     assert sub.data["ordner"] == "Ueberwachung/Treppe" and sub.data["dateimuster"].startswith("{cam}")

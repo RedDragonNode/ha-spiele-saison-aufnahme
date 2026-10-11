@@ -127,34 +127,41 @@
       "step": {
         "user": {
           "title": "Neues Aufnahme-Profil",
-          "description": "Ein Profil legt fest, in welchen Ordner welche Cams aufnehmen und wann. Eine Cam darf in mehreren Profilen stehen, nimmt aber nie in zwei gleichzeitig auf (wer zuerst kommt). Ohne Auslöser und ohne Zeitfenster startet das Profil nur von Hand. Nur Zeitfenster/Sonne: nimmt in dieser Zeit durchgehend auf. Mit Auslöser (z.B. Bewegungsmelder): nimmt auf, solange einer 'an' ist.",
+          "description": "Ein Profil legt fest, in welchen Ordner welche Cams aufnehmen und wann. Eine Cam darf in mehreren Profilen stehen, nimmt aber nie in zwei gleichzeitig auf (wer zuerst kommt). Ohne Auslöser und ohne Zeitfenster startet das Profil nur von Hand. Nur Zeitfenster/Sonne: nimmt in dieser Zeit durchgehend auf. Mit Auslöser (z.B. Bewegungsmelder): nimmt auf, solange einer 'an' ist. Im Dateiname-Muster stehen cam, kuerzel und profil in geschweiften Klammern für Name, Kürzel und Profil; dazu Datum/Zeit mit %CCYY %MM %DD %hh %mm %ss. Im nächsten Schritt wählst du den Unterordner.",
           "data": {
             "name": "Name (z.B. Treppe)",
-            "ordner": "Zielordner im Recorder (z.B. Ueberwachung/Treppe)",
             "cams": "Cams",
-            "dateimuster": "Dateiname ({cam}, {kuerzel}, {profil}, %DD.%MM.%CCYY %hh-%mm-%ss)",
+            "dateimuster": "Dateiname-Muster",
             "ausloeser": "Auslöser (Bewegung/Schalter/Sensor, 'an' = aufnehmen) - leer = kein Auslöser",
             "nachlauf_sekunden": "Nachlauf nach 'aus' in Sekunden",
             "max_dauer_minuten": "Höchstdauer pro Aufnahme in Minuten (0 = unbegrenzt)",
             "zeit_von": "Nur von (Uhrzeit)",
             "zeit_bis": "Nur bis (Uhrzeit)",
-            "sonne": "Sonne"
+            "sonne": "Sonne",
+            "hauptordner": "Hauptordner (Auswahl oder eigener Name)"
           }
         },
         "reconfigure": {
           "title": "Aufnahme-Profil bearbeiten",
-          "description": "Ein Profil legt fest, in welchen Ordner welche Cams aufnehmen und wann. Eine Cam darf in mehreren Profilen stehen, nimmt aber nie in zwei gleichzeitig auf (wer zuerst kommt). Ohne Auslöser und ohne Zeitfenster startet das Profil nur von Hand. Nur Zeitfenster/Sonne: nimmt in dieser Zeit durchgehend auf. Mit Auslöser (z.B. Bewegungsmelder): nimmt auf, solange einer 'an' ist.",
+          "description": "Ein Profil legt fest, in welchen Ordner welche Cams aufnehmen und wann. Eine Cam darf in mehreren Profilen stehen, nimmt aber nie in zwei gleichzeitig auf (wer zuerst kommt). Ohne Auslöser und ohne Zeitfenster startet das Profil nur von Hand. Nur Zeitfenster/Sonne: nimmt in dieser Zeit durchgehend auf. Mit Auslöser (z.B. Bewegungsmelder): nimmt auf, solange einer 'an' ist. Im Dateiname-Muster stehen cam, kuerzel und profil in geschweiften Klammern für Name, Kürzel und Profil; dazu Datum/Zeit mit %CCYY %MM %DD %hh %mm %ss. Im nächsten Schritt wählst du den Unterordner.",
           "data": {
             "name": "Name (z.B. Treppe)",
-            "ordner": "Zielordner im Recorder (z.B. Ueberwachung/Treppe)",
             "cams": "Cams",
-            "dateimuster": "Dateiname ({cam}, {kuerzel}, {profil}, %DD.%MM.%CCYY %hh-%mm-%ss)",
+            "dateimuster": "Dateiname-Muster",
             "ausloeser": "Auslöser (Bewegung/Schalter/Sensor, 'an' = aufnehmen) - leer = kein Auslöser",
             "nachlauf_sekunden": "Nachlauf nach 'aus' in Sekunden",
             "max_dauer_minuten": "Höchstdauer pro Aufnahme in Minuten (0 = unbegrenzt)",
             "zeit_von": "Nur von (Uhrzeit)",
             "zeit_bis": "Nur bis (Uhrzeit)",
-            "sonne": "Sonne"
+            "sonne": "Sonne",
+            "hauptordner": "Hauptordner (Auswahl oder eigener Name)"
+          }
+        },
+        "unterordner": {
+          "title": "Unterordner",
+          "description": "Unterordner in {hauptordner} (leer = direkt im Hauptordner; eigener Name möglich, auch mit / für mehrere Ebenen).",
+          "data": {
+            "unterordner": "Unterordner"
           }
         }
       },

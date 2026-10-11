@@ -15,6 +15,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers import selector
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import logic
 from .const import (
@@ -42,9 +43,11 @@ from .const import (
     CONF_PROF_CAMS,
     CONF_PROF_FOLDER,
     CONF_PROF_FROM,
+    CONF_PROF_MAIN,
     CONF_PROF_MAX,
     CONF_PROF_NAME,
     CONF_PROF_PATTERN,
+    CONF_PROF_SUB,
     CONF_PROF_SUN,
     CONF_PROF_TO,
     CONF_PROF_TRIGGERS,
@@ -62,6 +65,7 @@ from .const import (
     SUBENTRY_PARTNER,
     SUBENTRY_PROFILE,
 )
+from .recorder_client import RecorderClient, RecorderError
 
 _TEXT = selector.TextSelector()
 _SECRET = selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD))
@@ -317,10 +321,34 @@ class CamSubentryFlow(ConfigSubentryFlow):
 
 
 # ------------------------------------------------------------------- Profile
-class ProfileSubentryFlow(ConfigSubentryFlow):
-    """Aufnahme-Profil: wohin, welche Cams, welcher Ausloeser."""
+def _folder_select(options: list[str]) -> selector.SelectSelector:
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[selector.SelectOptionDict(value=o, label=o) for o in options],
+            custom_value=True,
+            mode=selector.SelectSelectorMode.DROPDOWN,
+        )
+    )
 
-    def _schema(self) -> vol.Schema:
+
+class ProfileSubentryFlow(ConfigSubentryFlow):
+    """Aufnahme-Profil: wohin, welche Cams, welcher Ausloeser (Schritt 1 Hauptordner, Schritt 2 Unterordner)."""
+
+    _pending: dict[str, Any]
+    _own: str | None = None
+
+    async def _dirs(self, parts: list[str]) -> list[str]:
+        """Ordner aus dem Recorder (leer, wenn er nicht erreichbar ist - Eingabe von Hand bleibt moeglich)."""
+        opts = self._get_entry().options
+        url, key = opts.get(CONF_RECORDER_URL), opts.get(CONF_RECORDER_KEY)
+        if not url or not key:
+            return []
+        try:
+            return await RecorderClient(async_get_clientsession(self.hass), url, key).list_dirs(parts)
+        except RecorderError:
+            return []
+
+    def _schema(self, main_options: list[str]) -> vol.Schema:
         cams = [
             selector.SelectOptionDict(value=sid, label=s.data[CONF_CAM_NAME])
             for sid, s in sorted(self._get_entry().subentries.items(), key=lambda kv: logic.norm(kv[1].data.get(CONF_CAM_NAME, "")))
@@ -329,7 +357,7 @@ class ProfileSubentryFlow(ConfigSubentryFlow):
         return vol.Schema(
             {
                 vol.Required(CONF_PROF_NAME): _TEXT,
-                vol.Required(CONF_PROF_FOLDER): _TEXT,
+                vol.Required(CONF_PROF_MAIN): _folder_select(main_options),
                 vol.Required(CONF_PROF_CAMS): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=cams, multiple=True, mode=selector.SelectSelectorMode.DROPDOWN)
                 ),
@@ -358,9 +386,10 @@ class ProfileSubentryFlow(ConfigSubentryFlow):
 
     @staticmethod
     def _data(user_input: dict[str, Any]) -> dict[str, Any]:
-        data: dict[str, Any] = {
+        main = logic.split_path(user_input.get(CONF_PROF_MAIN, ""))
+        return {
             CONF_PROF_NAME: user_input[CONF_PROF_NAME].strip(),
-            CONF_PROF_FOLDER: "/".join(logic.split_path(user_input[CONF_PROF_FOLDER])),
+            CONF_PROF_FOLDER: "/".join(main),
             CONF_PROF_CAMS: list(user_input.get(CONF_PROF_CAMS) or []),
             CONF_PROF_PATTERN: (user_input.get(CONF_PROF_PATTERN) or DEFAULT_PATTERN).strip(),
             CONF_PROF_TRIGGERS: list(user_input.get(CONF_PROF_TRIGGERS) or []),
@@ -370,7 +399,6 @@ class ProfileSubentryFlow(ConfigSubentryFlow):
             CONF_PROF_TO: user_input.get(CONF_PROF_TO) or "",
             CONF_PROF_SUN: user_input.get(CONF_PROF_SUN) or "",
         }
-        return data
 
     def _errors(self, data: dict[str, Any], own: str | None) -> dict[str, str]:
         errors: dict[str, str] = {}
@@ -382,30 +410,52 @@ class ProfileSubentryFlow(ConfigSubentryFlow):
         if not data[CONF_PROF_NAME] or logic.norm(data[CONF_PROF_NAME]) in taken:
             errors[CONF_PROF_NAME] = "already_configured"
         if not data[CONF_PROF_FOLDER]:
-            errors[CONF_PROF_FOLDER] = "folder_required"
+            errors[CONF_PROF_MAIN] = "folder_required"
         if not data[CONF_PROF_CAMS]:
             errors[CONF_PROF_CAMS] = "cams_required"
         if bool(data[CONF_PROF_FROM]) != bool(data[CONF_PROF_TO]):
             errors[CONF_PROF_TO] = "time_both"
         return errors
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+    async def _step_one(self, step_id: str, user_input: dict[str, Any] | None, current: dict[str, Any]) -> SubentryFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             data = self._data(user_input)
-            errors = self._errors(data, None)
+            errors = self._errors(data, self._own)
             if not errors:
-                return self.async_create_entry(title=data[CONF_PROF_NAME], data=data, unique_id=logic.norm(data[CONF_PROF_NAME]))
-        return self.async_show_form(step_id="user", data_schema=_suggest(self._schema(), user_input or {}), errors=errors)
+                self._pending = data
+                return await self.async_step_unterordner()
+        main_options = await self._dirs([])
+        return self.async_show_form(
+            step_id=step_id, data_schema=_suggest(self._schema(main_options), user_input or current), errors=errors
+        )
+
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        self._own = None
+        return await self._step_one("user", user_input, {})
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         sub = self._get_reconfigure_subentry()
-        errors: dict[str, str] = {}
+        self._own = sub.subentry_id
+        parts = logic.split_path(sub.data.get(CONF_PROF_FOLDER, ""))
+        current = {**sub.data, CONF_PROF_MAIN: parts[0] if parts else ""}
+        return await self._step_one("reconfigure", user_input, current)
+
+    async def async_step_unterordner(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        main = logic.split_path(self._pending[CONF_PROF_FOLDER])
         if user_input is not None:
-            data = self._data(user_input)
-            errors = self._errors(data, sub.subentry_id)
-            if not errors:
-                return self.async_update_and_abort(self._get_entry(), sub, title=data[CONF_PROF_NAME], data=data)
+            sub = logic.split_path(user_input.get(CONF_PROF_SUB, ""))
+            data = {**self._pending, CONF_PROF_FOLDER: "/".join([*main, *sub])}
+            if self._own is None:
+                return self.async_create_entry(title=data[CONF_PROF_NAME], data=data, unique_id=logic.norm(data[CONF_PROF_NAME]))
+            return self.async_update_and_abort(
+                self._get_entry(), self._get_reconfigure_subentry(), title=data[CONF_PROF_NAME], data=data
+            )
+        existing = logic.split_path(self._get_reconfigure_subentry().data.get(CONF_PROF_FOLDER, "")) if self._own else []
+        suggested = "/".join(existing[1:]) if existing[:1] == main[:1] else ""
+        schema = vol.Schema({vol.Optional(CONF_PROF_SUB): _folder_select(await self._dirs(main))})
         return self.async_show_form(
-            step_id="reconfigure", data_schema=_suggest(self._schema(), user_input or dict(sub.data)), errors=errors
+            step_id="unterordner",
+            data_schema=_suggest(schema, {CONF_PROF_SUB: suggested}),
+            description_placeholders={"hauptordner": "/".join(main)},
         )
