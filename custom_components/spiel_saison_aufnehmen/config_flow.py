@@ -169,7 +169,7 @@ class SpielpartnerConfigFlow(ConfigFlow, domain=DOMAIN):
         return {
             SUBENTRY_PARTNER: PartnerSubentryFlow,
             SUBENTRY_CAM: CamSubentryFlow,
-            SUBENTRY_PROFILE: ProfileSubentryFlow,
+            # Aufnahme-Profile werden kuenftig in der Integration 'Cam Recorder Profile' angelegt
         }
 
 

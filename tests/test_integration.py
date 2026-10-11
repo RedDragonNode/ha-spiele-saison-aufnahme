@@ -420,22 +420,13 @@ async def test_profile_max_duration_and_lost_detection(hass: HomeAssistant) -> N
     assert not m.profile_running("prof_X")
 
 
-async def test_profile_subentry_flow(hass: HomeAssistant) -> None:
+async def test_no_profile_button_offered(hass: HomeAssistant) -> None:
     entry = await _setup(hass)
-    FakeRecorder.dirs = {"": ["Der_Fuchsbau", "Ueberwachung"], "Ueberwachung": ["Treppe"]}
-    with patch("custom_components.spiel_saison_aufnehmen.config_flow.RecorderClient", FakeRecorder):
-        flow = await hass.config_entries.subentries.async_init((entry.entry_id, "profil"), context={"source": "user"})
-        bad = await hass.config_entries.subentries.async_configure(flow["flow_id"], {"name": "T", "hauptordner": "A", "cams": []})
-        assert bad["errors"] == {"cams": "cams_required"}
-        step2 = await hass.config_entries.subentries.async_configure(
-            flow["flow_id"],
-            {"name": "Treppe", "hauptordner": "Ueberwachung", "cams": ["cam_Fuchsblick"], "zeit_von": "22:00:00", "zeit_bis": "06:00:00"},
-        )
-        assert step2["step_id"] == "unterordner"
-        ok = await hass.config_entries.subentries.async_configure(flow["flow_id"], {"unterordner": "Treppe"})
-    assert ok["type"] == "create_entry"
-    sub = next(s for s in entry.subentries.values() if s.subentry_type == "profil")
-    assert sub.data["ordner"] == "Ueberwachung/Treppe" and sub.data["dateimuster"].startswith("{cam}")
+    from custom_components.spiel_saison_aufnehmen.config_flow import (
+        SpielpartnerConfigFlow,
+    )
+
+    assert set(SpielpartnerConfigFlow.async_get_supported_subentry_types(entry)) == {"spielpartner", "cam"}
 
 
 async def test_broken_subentry_is_skipped_not_fatal(hass: HomeAssistant) -> None:
@@ -457,7 +448,11 @@ async def test_counters_imported_from_old_integration_store(hass: HomeAssistant)
     folder.mkdir(parents=True, exist_ok=True)
     old = {"version": 1, "key": "spielpartner_aufnahme.abc", "data": {"active": None, "partners": {
         "frank_visselff": {"saison": 5, "aufnahmen": 7, "gesamt": 42, "thread_id": "99", "thread_saison": "05", "pfad": "", "vorbereitet": None}}}}
-    (folder / "spielpartner_aufnahme.abc").write_text(json.dumps(old))
-    entry = await _setup(hass)
-    st = entry.runtime_data.state_of("frank_visselff")
+    legacy = folder / "spielpartner_aufnahme.abc"
+    legacy.write_text(json.dumps(old))
+    try:
+        entry = await _setup(hass)
+        st = entry.runtime_data.state_of("frank_visselff")
+    finally:
+        legacy.unlink(missing_ok=True)
     assert (st["saison"], st["aufnahmen"], st["gesamt"], st["thread_id"]) == (5, 7, 42, "99")
