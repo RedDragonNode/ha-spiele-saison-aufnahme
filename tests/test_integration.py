@@ -565,3 +565,39 @@ async def test_cam_can_be_excluded_from_spielpartner_recording(hass: HomeAssista
     with _stream_patch():
         res = await m.async_recorder_start()
     assert "Fuchsblick" not in res["cams"] and "Kesselcam" in res["cams"]
+
+
+async def test_stored_thread_of_wrong_forum_is_replaced(hass: HomeAssistant) -> None:
+    from custom_components.spiel_saison_aufnehmen.discord_client import DiscordError
+
+    entry = await _setup(hass)
+    m = entry.runtime_data
+    p = m.partners["frank_visselff"]
+    p.forum_id = "111"
+    s = m.state_of("frank_visselff")
+    s["thread_id"], s["thread_saison"] = "999", "02"
+    created = []
+
+    class Fake:
+        parent = "222"
+        missing = False
+
+        async def get_channel(self, cid):
+            if self.missing:
+                raise DiscordError("Discord HTTP 404: Unknown Channel")
+            return {"id": cid, "parent_id": self.parent}
+
+        async def create_forum_thread(self, forum, name, **kw):
+            created.append(forum)
+            return "555"
+
+    fake = Fake()
+    with patch.object(m, "_discord", return_value=fake):
+        hints: list[str] = []
+        assert "neuer Thread" in await m._ensure_thread(p, s, hints) and s["thread_id"] == "555" and hints
+        fake.parent = "111"  # passender Thread bleibt
+        hints = []
+        assert "vorhanden" in await m._ensure_thread(p, s, hints) and created == ["111"] and not hints
+        fake.missing = True  # geloescht -> neu
+        s["thread_id"] = "777"
+        assert "neuer Thread" in await m._ensure_thread(p, s, [])

@@ -50,6 +50,10 @@ class DiscordClient:
                 raise DiscordError(f"Discord nicht erreichbar: {err}") from err
         raise DiscordError("Discord: Rate-Limit")
 
+    async def get_channel(self, channel_id: str) -> dict[str, Any]:
+        """Kanal/Thread nachschlagen (u. a. parent_id = Forum-Kanal des Threads)."""
+        return await self._request("GET", f"/channels/{channel_id}")
+
     async def create_forum_thread(
         self, forum_id: str, name: str, *, title: str, description: str, message: str
     ) -> str:

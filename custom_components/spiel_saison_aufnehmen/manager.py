@@ -418,9 +418,20 @@ class SpielpartnerManager:
             return "nicht eingerichtet (kein Bot-Token)"
         if not p.forum_id:
             return "kein Forum-Kanal fuer diesen Spielpartner hinterlegt"
-        if s["thread_id"] and s["thread_saison"] == logic.pad(s["saison"]):
-            return f"Thread vorhanden ({s['thread_id']})"
         saison = logic.pad(s["saison"])
+        if s["thread_id"] and s["thread_saison"] == saison:
+            try:
+                ch = await client.get_channel(s["thread_id"])
+            except DiscordError as err:
+                if "HTTP 404" not in str(err) and "HTTP 403" not in str(err):  # nur Netzfehler: Thread behalten
+                    return f"Thread vorhanden ({s['thread_id']})"
+                hints.append(f"Gespeicherter Thread {s['thread_id']} existiert nicht mehr - neuer wird angelegt")
+            else:
+                if str(ch.get("parent_id") or "") == str(p.forum_id):
+                    return f"Thread vorhanden ({s['thread_id']})"
+                hints.append(
+                    f"Gespeicherter Thread {s['thread_id']} liegt nicht im Forum {p.forum_id} - neuer wird angelegt"
+                )
         try:
             thread = await client.create_forum_thread(
                 p.forum_id,
